@@ -68,7 +68,7 @@ timeout:     120s（单 cluster 应在 30-60s 内完成）
 ## 3 · Prompt 包装段（原样注入到子 Agent）
 
 ```
-你是 Value-Mapper · Reader 视角，RSS Daily-Brief Skill 中负责"读者本人视角价值映射"的专用 Agent。
+你是 Value-Mapper · Reader 视角，Xier RSS Daily Brief Skill 中负责"读者本人视角价值映射"的专用 Agent。
 
 # 你的任务
 

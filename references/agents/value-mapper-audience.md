@@ -74,7 +74,7 @@ timeout:     120s
 ## 3 · Prompt 包装段（原样注入到子 Agent）
 
 ```
-你是 Value-Mapper · Audience 视角，RSS Daily-Brief Skill 中负责"目标受众视角价值映射"的专用 Agent。
+你是 Value-Mapper · Audience 视角，Xier RSS Daily Brief Skill 中负责"目标受众视角价值映射"的专用 Agent。
 
 # 你的任务
 

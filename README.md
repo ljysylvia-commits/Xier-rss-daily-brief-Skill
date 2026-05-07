@@ -1,6 +1,8 @@
-# RSS Daily Brief Skill
+# Xier RSS Daily Brief Skill
 
-一个可配置的公开信源日报 Skill，用来帮不同用户建立自己的信息判断系统。
+个人标题：Xier RSS Daily Brief Skill
+
+Xier 的可配置公开信源日报 Skill，用来帮不同用户建立自己的信息判断系统。
 
 它的核心价值是**降噪**：先理解用户是谁、为什么读、读给谁，再决定信源、评分规则、价值视角和日报格式，最后把 RSS / 网页 / newsletter / podcast 这类高噪声公开信息流，转成可读、可用、可持续自动化的 Markdown / HTML 日报。
 
@@ -34,9 +36,9 @@
 
 | Agent | 安装路径 |
 |---|---|
-| Codex | `~/.codex/skills/rss-daily-brief/` 或 `.codex/skills/rss-daily-brief/` |
-| Claude Code | `~/.claude/skills/rss-daily-brief/` 或 `.claude/skills/rss-daily-brief/` |
-| Kimi Code | `~/.kimi/skills/rss-daily-brief/`、`.kimi/skills/rss-daily-brief/`，或 `kimi --skills-dir /path/to/skills` |
+| Codex | `~/.codex/skills/xier-rss-daily-brief-skill/` 或 `.codex/skills/xier-rss-daily-brief-skill/` |
+| Claude Code | `~/.claude/skills/xier-rss-daily-brief-skill/` 或 `.claude/skills/xier-rss-daily-brief-skill/` |
+| Kimi Code | `~/.kimi/skills/xier-rss-daily-brief-skill/`、`.kimi/skills/xier-rss-daily-brief-skill/`，或 `kimi --skills-dir /path/to/skills` |
 
 建议维护一份 Skill 源包，不要为不同 agent 分叉出多份 `SKILL.md`。
 
@@ -55,8 +57,7 @@
 ├── config/report_config.json # 输出格式、语言、主题、功能开关
 ├── references/               # 画像、信源、提示词、首次配置文档
 ├── scripts/                  # 抓取、去重、渲染等确定性脚本
-├── assets/                   # Markdown 和 HTML 模板
-└── tests/                    # 本地测试 fixture
+└── assets/                   # Markdown 和 HTML 模板
 ```
 
 关键文件：
@@ -75,7 +76,7 @@
 ## 安装
 
 ```bash
-cd rss-daily-brief-open-source
+cd xier-rss-daily-brief-skill
 bash scripts/bootstrap.sh
 python3 scripts/healthcheck.py --root .
 ```
@@ -228,29 +229,11 @@ python3 scripts/render.py \
 
 ## 测试
 
+发布包不包含内部测试数据。公开版本可先执行健康检查和脚本语法检查：
+
 ```bash
 python3 scripts/healthcheck.py --root .
 python3 -m py_compile scripts/render.py scripts/merge_perspectives.py scripts/healthcheck.py scripts/fetch.py scripts/dedupe.py scripts/cleanup_tmp.py scripts/archive_adapters.py
-```
-
-渲染 fixture 输出：
-
-```bash
-python3 scripts/render.py \
-  --clusters-index tests/fixtures/minimal_run/clusters_index.json \
-  --scored tests/fixtures/minimal_run/scored.json \
-  --value-mapped tests/fixtures/minimal_run/value_mapped.json \
-  --outlook tests/fixtures/minimal_run/outlook.json \
-  --others-translated tests/fixtures/minimal_run/others_translated.json \
-  --fetcher-log tests/fixtures/minimal_run/fetcher.log \
-  --raw-items tests/fixtures/minimal_run/raw_items.jsonl \
-  --run-context tests/fixtures/minimal_run/run_context.json \
-  --report-config config/report_config.json \
-  --template assets/daily.md.j2 \
-  --html-template assets/daily.html.j2 \
-  --output outputs/open-source-tests/minimal-no-pillars.md \
-  --html-output outputs/open-source-tests/minimal-no-pillars.html \
-  --output-formats markdown,html
 ```
 
 ## 输出和缓存

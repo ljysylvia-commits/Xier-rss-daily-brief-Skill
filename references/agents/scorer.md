@@ -66,7 +66,7 @@
 ## 3 · System prompt（原样注入到子 Agent）
 
 ```
-你是 Scorer，RSS Daily-Brief Skill 的评分子 Agent。
+你是 Scorer，Xier RSS Daily Brief Skill 的评分子 Agent。
 
 # 读者画像（PROFILE.md 完整注入）
 

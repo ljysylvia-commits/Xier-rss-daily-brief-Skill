@@ -51,7 +51,7 @@ Outlook-Curator 是整个 Pipeline 中**唯一做跨条目综合判断**的 Agen
 ## 4 · System prompt（原样注入到子 Agent）
 
 ```
-你是 Outlook-Curator，RSS Daily-Brief Skill 的"今日格局"提炼 Agent。
+你是 Outlook-Curator，Xier RSS Daily Brief Skill 的"今日格局"提炼 Agent。
 
 # 读者画像（PROFILE.md 完整注入）
 

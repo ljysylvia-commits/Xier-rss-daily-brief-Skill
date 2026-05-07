@@ -1,9 +1,11 @@
 ---
-name: rss-daily-brief
-description: Generate a configurable, noise-reducing daily brief from public RSS, Atom, archive, newsletter, podcast show-note, or engineering-blog sources. Use when the user asks to run or customize an RSS daily brief, daily report, daily digest, newsletter brief, source-monitoring brief, information filter, or Markdown/HTML report. If the user has no source list yet, the skill can recommend a starter source pack from the user's profile, target audience, and report goals, then let the user add their own sources before fetching. The skill fetches recent public web sources, deduplicates stories, scores them against a configurable reader profile, maps reader/audience value, synthesizes an outlook, and renders Markdown, themed HTML, or both. It does not handle login-gated, cookie-gated, CAPTCHA-gated, X/Twitter, WeChat, Xiaohongshu, or other anti-scrape sources.
+name: xier-rss-daily-brief-skill
+description: Generate a configurable, noise-reducing daily brief with Xier RSS Daily Brief Skill from public RSS, Atom, archive, newsletter, podcast show-note, or engineering-blog sources. Use when the user asks to run or customize an RSS daily brief, daily report, daily digest, newsletter brief, source-monitoring brief, information filter, or Markdown/HTML report. If the user has no source list yet, the skill can recommend a starter source pack from the user's profile, target audience, and report goals, then let the user add their own sources before fetching. The skill fetches recent public web sources, deduplicates stories, scores them against a configurable reader profile, maps reader/audience value, synthesizes an outlook, and renders Markdown, themed HTML, or both. It does not handle login-gated, cookie-gated, CAPTCHA-gated, X/Twitter, WeChat, Xiaohongshu, or other anti-scrape sources.
 ---
 
-# RSS Daily-Brief
+# Xier RSS Daily Brief Skill
+
+个人标题：Xier RSS Daily Brief Skill
 
 ## 文字规范
 
