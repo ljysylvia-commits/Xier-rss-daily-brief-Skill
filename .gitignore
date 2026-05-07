@@ -1,0 +1,18 @@
+# Runtime outputs
+outputs/
+tmp/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local environments and secrets
+.env
+.env.*
+.venv/
+venv/
+
+# macOS
+.DS_Store
+

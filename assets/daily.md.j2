@@ -1,0 +1,242 @@
+{#-
+Daily-Brief · Writer 模板
+规范来源：agents/writer.md · EXAMPLE.md · ARCHITECTURE.md §2 数据契约接力
+上下文变量来源：scripts/render.py `ctx` 字典
+
+字段口径（与 ARCHITECTURE §2 + agents/value-mapper-schema.md §1.3 保持一致）：
+  row = scored_entry ∪ clusters_index[i] ∪ {value_mapped, badges, pillars_display, degraded,
+                                             reader_blocks, audience_blocks}
+  cluster 元信息字段（来自 clusters_index.json，扁平化）：
+    primary_source_name · primary_title · primary_lang · primary_content_type
+    member_count · earliest_published_at · latest_published_at · full_content_tokens_sum
+  scored 字段：
+    final_score · base_score · tier · match_mode · priority_reason
+    non_consensus_flag · is_followup · followup_ref_cluster · spam_confidence
+  value_mapped（vm）合并产物字段：
+    title_zh · key_tags · core_content[] · reading_suggestion
+    value_blocks[{perspective, angle, body}]  ← Writer 侧按 perspective 拆成 reader_blocks / audience_blocks
+    pillars[] optional · skipped_perspectives[] · warnings[] · followup_note(opt)
+
+  render.py 注入的 angle_label 字典（key → 中文名）：
+    reader_angle_label · audience_angle_label · pillar_label
+-#}
+{%- set report_title = report_config.get("report_title", "今日简报") -%}
+{%- set L = labels -%}
+# 📰 {{ report_title }} · {{ date }}
+
+> 本期共 {{ total_clusters }} 条 | 🔥 必读 {{ tier_counts.get("must_read", 0) }} · ⭐ 推荐 {{ tier_counts.get("recommended", 0) }} · 📌 可选 {{ tier_counts.get("optional", 0) }} · 其他信息 {{ tier_counts.get("others", 0) }}
+> 🔍 AI 推荐 {{ special_counts.get("ai_discovered", 0) }} 条 · 📎 续报 {{ special_counts.get("followup", 0) }} 条 · 💥 非共识 {{ special_counts.get("non_consensus", 0) }} 条{% if special_counts.get("spam", 0) %} · ⚠️ 疑似水文 {{ special_counts.get("spam", 0) }} 条{% endif %}
+
+{% if regenerated -%}
+<!-- regenerated at {{ now_str }} -->
+
+{% endif -%}
+
+{#- ==================== Outlook ==================== -#}
+{% if not outlook_degraded and outlook %}
+## {{ L.get("outlook", "今日格局") }}
+
+{% for o in outlook %}{{ o.get("_md") or ("- **" ~ o.get("tag", "观察") ~ "** — " ~ o.get("body", "(空)")) }}
+{% endfor %}
+
+---
+
+{% elif outlook_degraded %}
+> ⚠️ {{ L.get("outlook", "今日格局") }}（outlook）降级：Outlook-Curator 产物缺失或未生成
+
+---
+
+{% endif %}
+
+{#- ==================== 公共宏：单 cluster 渲染 ==================== -#}
+{% macro render_item(row) -%}
+{%- set vm = row.get("value_mapped") or {} -%}
+{%- set title = vm.get("title_zh") or row.get("primary_title") or "（无标题）" -%}
+{%- set badges_prefix = (row.get("badges") or []) | join(" · ") -%}
+### {% if badges_prefix %}{{ badges_prefix }} · {% endif %}{{ title }}
+
+{% if vm.get("key_tags") %}
+**关键标签** · {{ vm.key_tags | join(" · ") }}
+
+{% endif %}
+**{{ L.get("source_metadata", "重点信息") }}**
+
+- 来源：{{ row.get("primary_source_name", "—") }}
+{% if row.get("primary_url") %}
+- 原文链接：<{{ row.primary_url }}>
+{% endif %}
+{% if row.get("latest_published_at") %}
+- 发布时间：{{ row.latest_published_at[:10] }}
+{% endif %}
+- 评分：{{ "%.1f"|format(row.get("final_score") or 0) }}{% if (row.get("member_count") or 1) > 1 %} · {{ row.member_count }} 个信源同时覆盖{% endif +%}
+{% if row.get("priority_reason") %}
+- 筛选理由：{{ row.priority_reason }}
+{% endif %}
+
+{% if vm.get("core_content") %}
+**{{ L.get("core_content", "核心内容") }}**
+
+{% for b in vm.core_content %}
+- {{ b }}
+{% endfor %}
+
+{% endif %}
+{#- ----------- Reader value ----------- -#}
+{% if row.get("reader_blocks") %}
+**{{ L.get("reader_value", "💡 对读者的价值") }}**
+
+{% for vb in row.reader_blocks %}
+- **【{{ reader_angle_label.get(vb.get("angle"), vb.get("angle", "—")) }}】** {{ vb.get("body", "") }}
+{% endfor %}
+
+{% endif %}
+{#- ----------- Audience value ----------- -#}
+{% if row.get("audience_blocks") %}
+**{{ L.get("audience_value", "🎯 对目标受众的价值") }}**
+
+{% for vb in row.audience_blocks %}
+- **【{{ audience_angle_label.get(vb.get("angle"), vb.get("angle", "—")) }}】** {{ vb.get("body", "") }}
+{% endfor %}
+
+{% endif %}
+{#- ----------- Pillars ----------- -#}
+{% if pillars_enabled and vm.get("pillars") %}
+**{{ L.get("pillars", "📚 内容支柱归位") }}**：{{ row.pillars_display }}
+
+{% endif %}
+{% if row.get("is_followup") and vm.get("followup_note") %}
+**📎 续报** · {{ vm.followup_note }}
+
+{% endif %}
+{% if (row.get("member_count") or 1) > 1 %}
+**{{ L.get("other_sources", "其他来源") }}**：共 {{ row.member_count }} 个信源覆盖该主题。
+
+{% endif %}
+{% if vm.get("reading_suggestion") %}
+**{{ L.get("reading_suggestion", "阅读建议") }}**：{{ vm.reading_suggestion }}
+
+{% endif %}
+{% if row.get("degraded") or (vm.get("warnings") or []) %}
+
+ℹ️ 降级提示：{{ row.get("warnings_short") or "该条目为降级产物" }}
+{% endif %}
+
+---
+
+{%- endmacro %}
+
+{#- ==================== 🔥 必读 ==================== -#}
+{% if must_read %}
+## 🔥 必读
+
+{% for row in must_read %}
+{{ render_item(row) }}
+{% endfor %}
+{% endif %}
+
+{#- ==================== ⭐ 推荐 ==================== -#}
+{% if recommended %}
+## ⭐ 推荐
+
+{% for row in recommended %}
+{{ render_item(row) }}
+{% endfor %}
+{% endif %}
+
+{#- ==================== 📌 可选 ==================== -#}
+{% if optional %}
+## 📌 可选
+
+{% for row in optional %}
+{{ render_item(row) }}
+{% endfor %}
+{% endif %}
+
+{#- ==================== 其他信息（others tier） ==================== -#}
+{#- 公共宏：单行渲染，复用在 demoted / fresh / stale 三子组 -#}
+{% macro render_others_row(row) -%}
+{%- set vm = row.get("value_mapped") or {} -%}
+{%- set title = row.get("title_zh_others") or vm.get("title_zh") or row.get("primary_title") or row.get("title") or "—" -%}
+{%- set url = row.get("primary_url") -%}
+{%- set title_cell = ("[" ~ (title | replace("|", "\\|") | replace("[", "(") | replace("]", ")")) ~ "](" ~ url ~ ")") if url else (title | replace("|", "\\|")) -%}
+{%- set cc = vm.get("core_content") or [] -%}
+{%- set raw_gist = row.get("primary_gist") or "" -%}
+{%- set gist_src = row.get("gist_zh_others") or (cc[0] if cc else raw_gist) or "" -%}
+{%- set gist = (gist_src | replace("|", "\\|") | replace("\n", " ") | truncate(100, end="…")) -%}
+{%- set note_parts = [] -%}
+{%- if row.get("tier_adjusted_reason") or row.get("auto_demoted_reason") -%}{%- set _ = note_parts.append("⬇️ 原 " ~ row.get("original_tier_label", row.original_tier) ~ " 降级") -%}{%- endif -%}
+{%- if row.get("auto_demoted_reason") -%}{%- set _ = note_parts.append("⚠️ " ~ row.get("auto_demoted_reason_label", row.auto_demoted_reason)) -%}{%- endif -%}
+{%- if row.get("is_stale") -%}{%- set _ = note_parts.append("🕒 过窗") -%}{%- endif -%}
+{%- if (row.get("spam_confidence") or 0) >= 0.6 -%}{%- set _ = note_parts.append("⚠️ 疑似水文") -%}{%- endif -%}
+{%- if row.get("is_followup") -%}{%- set _ = note_parts.append("📎 续报") -%}{%- endif -%}
+| {{ row.get("primary_source_name", "—") | replace("|", "\\|") }} | {{ title_cell }} | {{ gist or "—" }} | {{ note_parts | join(" · ") or "—" }} |
+{%- endmacro %}
+
+{% if others %}
+## 其他信息
+
+> 共 {{ others | length }} 条{% if others_subcounts %} · 其中 ⬇️ 降级 {{ others_subcounts.get("demoted", 0) }} · 正常新入 {{ others_subcounts.get("fresh", 0) }} · 🕒 过窗 {{ others_subcounts.get("stale", 0) }}{% endif %}
+
+{% if others_demoted %}
+### ⬇️ 自动降级（原属更高 tier）
+
+| 来源 | 标题（链接） | 内容重点（≤100 字） | 备注 |
+|---|---|---|---|
+{% for row in others_demoted %}{{ render_others_row(row) }}
+{% endfor %}
+
+{% endif %}
+{% if others_fresh %}
+### 正常新入（窗口内，低相关度）
+
+| 来源 | 标题（链接） | 内容重点（≤100 字） | 备注 |
+|---|---|---|---|
+{% for row in others_fresh %}{{ render_others_row(row) }}
+{% endfor %}
+
+{% endif %}
+{% if others_stale %}
+### 🕒 过窗（published_at 超出 coverage_window）
+
+| 来源 | 标题（链接） | 内容重点（≤100 字） | 备注 |
+|---|---|---|---|
+{% for row in others_stale %}{{ render_others_row(row) }}
+{% endfor %}
+
+{% endif %}
+
+---
+{% endif %}
+
+{#- ==================== 信源状态 ==================== -#}
+## {{ L.get("source_health", "信源状态") }}
+
+{% set fresh = source_health.get("fresh") or [] %}
+{% set no_new = source_health.get("no_new_items") or [] %}
+{% set stale = source_health.get("stale") or [] %}
+{% set irregular = source_health.get("irregular") or [] %}
+{% set dead = source_health.get("dead") or [] %}
+{% set total_registered = (fresh | length) + (no_new | length) + (stale | length) + (irregular | length) + (dead | length) %}
+**今日有更新**（{{ fresh | length }} / {{ total_registered }}）：{{ fresh | join(" · ") or "—" }}
+
+**今日无新内容**（{{ no_new | length }} / {{ total_registered }}）：{{ no_new | join(" · ") or "—" }}
+
+{% if stale %}
+**今日无更新但近期活跃**（{{ stale | length }}）：{{ stale | join(" · ") or "—" }}
+
+{% endif %}
+{% if irregular or dead %}
+**健康告警**
+
+{% for s in irregular %}- ⚠️ `{{ s }}` 不规律（7-90 天无更新）
+{% endfor %}
+{% for s in dead %}- ❌ `{{ s }}` 疑似停更（> 90 天）
+{% endfor %}
+{% endif %}
+_信源状态说明：`今日有更新` = 24h 窗口拉到新内容；`今日无新内容` = 通道健康但本次窗口无新条目；`今日无更新但近期活跃` = 7 天内有历史内容；`健康告警` = 长期无更新需人工核查。_
+
+---
+
+_生成于 {{ now_str }} · 日期 {{ date }} · 共 {{ total_clusters }} 条信息_
+
+_处理链路：抓取 → 去重 → 筛选 → 价值判断 → 今日格局 → 渲染_

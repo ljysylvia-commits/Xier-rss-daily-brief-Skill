@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Reusable content pillar configuration. Audience VM may assign 0-2 pillars per entry; Writer renders display names from this file.",
+  "owned_by": "audience",
+  "pillars": [
+    {
+      "key": "pillar_1_signal_decode",
+      "name_zh": "信号解读",
+      "name_en": "Signal Decode",
+      "trigger_tags": ["market signal", "timing", "model shift", "counter-consensus"],
+      "purpose": "Reusable market and industry signal notes"
+    },
+    {
+      "key": "pillar_2_practice",
+      "name_zh": "实践拆解",
+      "name_en": "Practice Teardown",
+      "trigger_tags": ["workflow", "tooling", "prompt", "agent", "case study"],
+      "purpose": "Reusable workflow and implementation notes"
+    },
+    {
+      "key": "pillar_3_methodology",
+      "name_zh": "方法论",
+      "name_en": "Methodology",
+      "trigger_tags": ["framework", "operating model", "strategy", "decision rule"],
+      "purpose": "Reusable frameworks for writing, briefing, or team discussion"
+    },
+    {
+      "key": "pillar_4_exploration",
+      "name_zh": "思考与探索",
+      "name_en": "Exploration",
+      "trigger_tags": ["open question", "long-term trend", "research", "reflection"],
+      "purpose": "Early-stage questions and exploratory ideas"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+# Daily-Brief Skill · Python 依赖
+# 安装：pip install -r scripts/requirements.txt
+
+feedparser>=6.0.11
+readability-lxml>=0.8.1
+lxml>=5.0.0
+lxml_html_clean>=0.1.0   # lxml 5+ 剥离 lxml.html.clean 到独立包；readability-lxml 需要它
+httpx[http2]>=0.27.0
+h2>=4.0.0              # httpx http2=True 必备；extras 不一定会被 pip 二次触发，显式写出来
+curl-cffi>=0.7         # TLS 指纹伪装（仅对需要的源启用，如 *.substack.com 子域）
+simhash>=2.1.2
+jinja2>=3.1.0
+python-dateutil>=2.9.0
+beautifulsoup4>=4.12.0

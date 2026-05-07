@@ -1,0 +1,81 @@
+{
+  "reader": [
+    {
+      "key": "decision_impact",
+      "label_zh": "决策影响",
+      "description": "影响具体选择、优先级、时机、取舍或资源分配"
+    },
+    {
+      "key": "context_shift",
+      "label_zh": "背景变化",
+      "description": "市场、政策、技术、文化、生态或 stakeholder 语境变化"
+    },
+    {
+      "key": "cognitive_framework",
+      "label_zh": "认知框架",
+      "description": "决策框架、mental model、系统视角或有用抽象"
+    },
+    {
+      "key": "workflow_action",
+      "label_zh": "行动方法",
+      "description": "工作流、清单、playbook、实验、落地步骤或运营实践"
+    },
+    {
+      "key": "system_or_product_signal",
+      "label_zh": "系统/产品信号",
+      "description": "系统行为、产品形态、UX pattern、商业模式、技术取舍或界面变化"
+    },
+    {
+      "key": "firsthand_evidence",
+      "label_zh": "一手证据",
+      "description": "一手实践、数据、案例、事故、benchmark、field note 或用户观察"
+    },
+    {
+      "key": "risk_or_constraint",
+      "label_zh": "风险与约束",
+      "description": "安全、政策、成本、信任、可靠性、合规、依赖或采用风险"
+    },
+    {
+      "key": "counter_consensus",
+      "label_zh": "反共识视角",
+      "description": "有证据支撑的非显然或反共识观点"
+    }
+  ],
+  "audience": [
+    {
+      "key": "practical_application",
+      "label_zh": "应用启发",
+      "description": "可迁移的行动顺序、实现模式、评估逻辑或可避免失败"
+    },
+    {
+      "key": "cognitive_update",
+      "label_zh": "认知更新",
+      "description": "意外事实、判断修正、风险信号或被忽视的副作用"
+    },
+    {
+      "key": "role_or_workflow_change",
+      "label_zh": "角色/流程变化",
+      "description": "角色设计、团队结构、工作流变化、协作模式或运营模型"
+    },
+    {
+      "key": "efficiency_or_quality",
+      "label_zh": "效率/质量",
+      "description": "速度、质量、吞吐、覆盖、服务水平、生产率或可靠性"
+    },
+    {
+      "key": "cost_or_resource",
+      "label_zh": "成本/资源",
+      "description": "预算、成本结构、ROI、定价、资源分配、产能或采购取舍"
+    },
+    {
+      "key": "structural_impact",
+      "label_zh": "结构性影响",
+      "description": "市场结构、价值链、供需变化、分发、竞争、政策或生态"
+    },
+    {
+      "key": "strategic_choice",
+      "label_zh": "战略选择",
+      "description": "时机、优先级、长期押注、依赖、定位或高层综合判断"
+    }
+  ]
+}

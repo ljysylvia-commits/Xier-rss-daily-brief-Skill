@@ -1,0 +1,698 @@
+<!doctype html>
+{%- set L = labels -%}
+{%- set report_title = report_config.get("report_title", "今日简报") -%}
+{%- set report_subtitle = report_config.get("report_subtitle", "Daily Brief") -%}
+{%- set raw_html_theme = report_config.get("html_theme", "light") -%}
+{%- set html_theme = "light" if raw_html_theme in ["light", "editorial"] else "dark" -%}
+{%- set html_opts = report_config.get("html") or {} -%}
+<html lang="{{ report_config.get("locale", "zh-CN") }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ report_title }} · {{ date }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&family=Noto+Serif+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0e0e;
+      --surface: #141617;
+      --surface-2: #1a1d1e;
+      --line: #2a2d2e;
+      --line-strong: #3a3f41;
+      --text: #e8e2d8;
+      --muted: #9b958c;
+      --faint: #6f6961;
+      --accent: #d97733;
+      --must: #dc4a37;
+      --rec: #d1a33a;
+      --opt: #7f8587;
+      --reader: #22383a;
+      --audience: #382b22;
+      --serif: "Noto Serif SC", "Songti SC", serif;
+      --latin: "IBM Plex Serif", Georgia, serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); color: var(--text); }
+    body {
+      margin: 0;
+      padding: 40px 20px 56px;
+      font-family: var(--serif);
+      font-size: 16px;
+      line-height: 1.8;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(217,119,51,.08), transparent 34rem),
+        linear-gradient(180deg, #101111 0%, var(--bg) 34rem);
+    }
+    a { color: inherit; text-decoration-color: rgba(217,119,51,.55); text-underline-offset: 4px; }
+    .container { max-width: {{ html_opts.get("max_width_px", 720) }}px; margin: 0 auto; }
+    body.theme-light {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-2: #f7f7f5;
+      --line: #e7e3dd;
+      --line-strong: #d8d2c9;
+      --text: #1f1f1d;
+      --muted: #55524d;
+      --faint: #8d867d;
+      --accent: #ff6a3d;
+      --must: #d94832;
+      --rec: #b7791f;
+      --opt: #74736d;
+      --reader: #f6f8fb;
+      --audience: #fff7ed;
+      padding-top: 34px;
+      background: #fff;
+      font-family: var(--serif);
+    }
+    body.theme-light .container { max-width: 680px; }
+    body.theme-light .terminal-bar { display: none; }
+    body.theme-light .masthead {
+      margin: 10px 0 30px;
+      padding: 0 0 22px;
+      border-left: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    body.theme-light .eyebrow,
+    body.theme-light .date-line {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: none;
+    }
+    body.theme-light h1 {
+      max-width: 620px;
+      margin: 10px 0 12px;
+      color: var(--text);
+      font-family: var(--serif);
+      font-size: clamp(42px, 7vw, 64px);
+      line-height: 1.05;
+      font-weight: 900;
+    }
+    body.theme-light .ticker {
+      margin-bottom: 38px;
+      background: #fff;
+      border-color: var(--line);
+    }
+    body.theme-light .tick {
+      min-height: 76px;
+      padding: 12px;
+    }
+    body.theme-light .tick-value { color: var(--text); font-size: 24px; }
+    body.theme-light .section { margin-top: 42px; }
+    body.theme-light .section-title {
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: .08em;
+      border-bottom-color: var(--line-strong);
+    }
+    body.theme-light .signal {
+      background: #fffaf4;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: 0;
+    }
+    body.theme-light .cluster {
+      margin: 0;
+      padding: 30px 0 32px;
+      background: #fff;
+      border: 0;
+      border-top: 1px solid var(--line);
+    }
+    body.theme-light .cluster.must,
+    body.theme-light .cluster.recommended,
+    body.theme-light .cluster.optional { border-left: 0; }
+    body.theme-light .badges { margin-bottom: 12px; }
+    body.theme-light .badge {
+      background: #fff;
+      border-color: var(--line-strong);
+      border-radius: 999px;
+      color: var(--muted);
+    }
+    body.theme-light h3 {
+      color: var(--text);
+      font-size: clamp(28px, 4vw, 38px);
+      line-height: 1.18;
+      font-weight: 900;
+    }
+    body.theme-light .tags {
+      color: var(--accent);
+      font-size: 12px;
+    }
+    body.theme-light .block {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top-color: var(--line);
+    }
+    body.theme-light .block-label {
+      color: var(--faint);
+      letter-spacing: .05em;
+      text-transform: none;
+    }
+    body.theme-light .meta-list { color: var(--muted); }
+    body.theme-light .persp {
+      border-color: var(--line);
+      border-left: 3px solid var(--accent);
+      background: var(--surface-2);
+    }
+    body.theme-light .persp.reader { background: var(--reader); }
+    body.theme-light .persp.audience { background: var(--audience); }
+    body.theme-light .angle-tag { color: var(--accent); }
+    body.theme-light .reading-tip,
+    body.theme-light .pillar-row,
+    body.theme-light .degraded {
+      background: #fffaf4;
+      color: var(--muted);
+      border-color: var(--line);
+    }
+    body.theme-light .others-wrap,
+    body.theme-light .sources {
+      background: #fff;
+      border-color: var(--line);
+    }
+    body.theme-light th { background: #faf9f7; color: var(--faint); }
+    body.theme-light td { color: var(--muted); }
+    body.theme-light .colophon { color: var(--faint); text-transform: none; }
+    body.theme-dark {
+      --bg: #101214;
+      --surface: #15191c;
+      --surface-2: #1c2226;
+      --line: #2d353a;
+      --accent: #6fb7d7;
+      --reader: #1b3338;
+      --audience: #302b1d;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    body.theme-dark .container { max-width: min(980px, calc(100vw - 32px)); }
+    body.theme-dark .masthead { margin: 28px 0 24px; }
+    body.theme-dark h1 { font-size: clamp(40px, 6vw, 60px); }
+    body.theme-dark .cluster { padding: 16px; margin-bottom: 18px; }
+    body.theme-dark h3 { font-size: 21px; }
+    body.theme-dark .persp { padding: 10px 12px; }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+      color: var(--faint);
+      font: 700 11px/1 var(--mono);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 18px rgba(217,119,51,.65);
+      animation: pulse 2.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: .55; transform: scale(.9); }
+      50% { opacity: 1; transform: scale(1.12); }
+    }
+    .masthead {
+      margin: 42px 0 34px;
+      padding-left: 22px;
+      border-left: 3px solid var(--accent);
+    }
+    .eyebrow, .date-line {
+      color: var(--accent);
+      font: 700 11px/1.4 var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 12px 0 12px;
+      color: var(--text);
+      font-size: clamp(48px, 10vw, 74px);
+      line-height: .96;
+      letter-spacing: 0;
+      font-weight: 900;
+    }
+    .date-line { color: var(--muted); }
+    .ticker {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--line);
+      margin: 0 0 42px;
+      background: rgba(20,22,23,.65);
+    }
+    .tick {
+      min-height: 92px;
+      padding: 14px 14px 12px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .tick:nth-child(4n) { border-right: 0; }
+    .tick-label {
+      margin-bottom: 8px;
+      color: var(--faint);
+      font: 700 10px/1.2 var(--mono);
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .tick-value {
+      color: var(--text);
+      font: 700 28px/1 var(--mono);
+    }
+    .tick.must .tick-value { color: var(--must); }
+    .tick.rec .tick-value { color: var(--rec); }
+    .tick.opt .tick-value { color: var(--opt); }
+    .section {
+      margin: 46px 0 0;
+    }
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin: 0 0 18px;
+      color: var(--text);
+      font: 700 13px/1.2 var(--mono);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 10px;
+    }
+    .section-title span:first-child::before {
+      content: "§ ";
+      color: var(--accent);
+    }
+    .section-count { color: var(--faint); font-weight: 600; }
+    .signal, .cluster, .sources, .others-table {
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+    .signal {
+      margin: 12px 0;
+      padding: 16px 18px;
+      border-left: 3px solid var(--accent);
+    }
+    .signal-tag {
+      margin-bottom: 5px;
+      color: var(--accent);
+      font: 700 11px/1.3 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .signal-body { color: var(--text); }
+    .ip-module {
+      border-left-color: var(--rec);
+    }
+    .ip-row {
+      display: grid;
+      grid-template-columns: 12px 1fr auto;
+      gap: 10px;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
+      align-items: start;
+    }
+    .ip-row:first-of-type { border-top: 0; }
+    .ip-dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: var(--rec);
+    }
+    .ip-count {
+      color: var(--faint);
+      font: 700 11px/1.8 var(--mono);
+      white-space: nowrap;
+    }
+    .cluster {
+      margin: 18px 0 26px;
+      padding: 20px 20px 18px;
+      border-left: 4px solid var(--opt);
+    }
+    .cluster.must { border-left-color: var(--must); }
+    .cluster.recommended { border-left-color: var(--rec); }
+    .cluster.optional { border-left-color: var(--opt); }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 13px;
+    }
+    .badge {
+      padding: 3px 7px;
+      border: 1px solid var(--line-strong);
+      color: var(--muted);
+      background: var(--surface-2);
+      font: 700 10px/1.2 var(--mono);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .badge.must { border-color: rgba(220,74,55,.52); color: #f09a89; }
+    .badge.recommended { border-color: rgba(209,163,58,.5); color: #e2c16a; }
+    .badge.optional { color: #b4b9ba; }
+    h2, h3, p { margin-top: 0; }
+    h3 {
+      margin: 0 0 10px;
+      color: var(--text);
+      font-size: 25px;
+      line-height: 1.35;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .tags {
+      margin-bottom: 16px;
+      color: var(--accent);
+      font: 600 12px/1.55 var(--mono);
+    }
+    .block {
+      margin-top: 17px;
+      padding-top: 15px;
+      border-top: 1px solid var(--line);
+    }
+    .block-label {
+      margin-bottom: 8px;
+      color: var(--faint);
+      font: 700 10px/1.2 var(--mono);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .meta-list, .bullets {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .bullets { color: var(--text); }
+    .meta-list { color: var(--muted); font-size: 14px; }
+    .meta-list li, .bullets li { margin: 3px 0; }
+    .persp {
+      margin-top: 11px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .persp.reader { background: var(--reader); }
+    .persp.audience { background: var(--audience); }
+    .angle-tag {
+      display: inline-block;
+      margin-bottom: 5px;
+      color: #f4d2a4;
+      font: 700 10px/1.2 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .pillar-row, .reading-tip, .degraded {
+      margin-top: 14px;
+      padding: 11px 13px;
+      background: #111313;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .reading-tip { border-left: 3px solid var(--accent); }
+    .degraded { border-left: 3px solid var(--opt); }
+    .others-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      color: var(--faint);
+      font: 700 10px/1.25 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      background: #111313;
+    }
+    td { color: var(--muted); font-size: 14px; }
+    td strong { color: var(--text); }
+    .others-group-title {
+      margin: 22px 0 10px;
+      color: var(--muted);
+      font: 700 12px/1.3 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .sources {
+      padding: 16px 18px;
+    }
+    .source-row {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .source-row:last-child { border-bottom: 0; }
+    .source-label {
+      color: var(--accent);
+      font: 700 11px/1.4 var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .source-value { color: var(--muted); font-size: 14px; }
+    .colophon {
+      margin-top: 52px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--faint);
+      font: 600 11px/1.8 var(--mono);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    @media (max-width: 640px) {
+      body { padding: 26px 14px 42px; font-size: 15px; }
+      .masthead { margin-top: 32px; padding-left: 16px; }
+      .ticker { grid-template-columns: repeat(2, 1fr); }
+      .tick:nth-child(2n) { border-right: 0; }
+      .tick:nth-child(4n) { border-right: 0; }
+      .cluster { padding: 17px 15px; }
+      h3 { font-size: 22px; }
+      .section-title { align-items: flex-start; flex-direction: column; gap: 6px; }
+      .ip-row { grid-template-columns: 12px 1fr; }
+      .ip-count { grid-column: 2; }
+    }
+  </style>
+</head>
+<body class="theme-{{ html_theme }}">
+  <main class="container">
+    {% if html_opts.get("show_terminal_bar", true) %}
+    <div class="terminal-bar"><span class="dot"></span><span>Daily Brief</span></div>
+    {% endif %}
+
+    <header class="masthead">
+      <div class="eyebrow">{{ report_subtitle }}</div>
+      <h1>{{ report_title }}</h1>
+      <div class="date-line">{{ date }}{% if regenerated %} / Regenerated {{ now_str }}{% endif %}</div>
+    </header>
+
+    <section class="ticker" aria-label="日报指标">
+      <div class="tick"><div class="tick-label">总计</div><div class="tick-value">{{ total_clusters }}</div></div>
+      <div class="tick must"><div class="tick-label">必读</div><div class="tick-value">{{ tier_counts.get("must_read", 0) }}</div></div>
+      <div class="tick rec"><div class="tick-label">推荐</div><div class="tick-value">{{ tier_counts.get("recommended", 0) }}</div></div>
+      <div class="tick opt"><div class="tick-label">可选</div><div class="tick-value">{{ tier_counts.get("optional", 0) }}</div></div>
+      <div class="tick"><div class="tick-label">AI 推荐</div><div class="tick-value">{{ special_counts.get("ai_discovered", 0) }}</div></div>
+      <div class="tick"><div class="tick-label">续报</div><div class="tick-value">{{ special_counts.get("followup", 0) }}</div></div>
+      <div class="tick"><div class="tick-label">非共识</div><div class="tick-value">{{ special_counts.get("non_consensus", 0) }}</div></div>
+      <div class="tick opt"><div class="tick-label">其他</div><div class="tick-value">{{ tier_counts.get("others", 0) }}</div></div>
+    </section>
+
+    {% if not outlook_degraded and outlook %}
+    <section class="section">
+      <div class="section-title"><span>{{ L.get("outlook", "今日格局") }}</span><span class="section-count">{{ outlook | length }} 条</span></div>
+      {% for o in outlook %}
+        {% set modules = o.get("modules") or [] %}
+        {% if modules %}
+        <article class="signal ip-module">
+          <div class="signal-tag">{{ o.get("tag", L.get("pillars", "内容支柱")) }}</div>
+          {% for m in modules %}
+            {% if (m.get("count") or 0) > 0 and (m.get("items") or []) %}
+            <div class="ip-row">
+              <span class="ip-dot"></span>
+              <div>{{ m.get("name", "未命名模块") }}：{{ (m.get("items") or []) | join(" / ") }}</div>
+              <span class="ip-count">{{ m.get("count") }} 条</span>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </article>
+        {% else %}
+        <article class="signal">
+          <div class="signal-tag">{{ o.get("tag", "观察") }}</div>
+          <div class="signal-body">{{ o.get("body", "（空）") }}</div>
+        </article>
+        {% endif %}
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% macro tier_badge_class(row, badge) -%}
+      {%- if "必读" in badge -%}must{%- elif "推荐" in badge -%}recommended{%- elif "可选" in badge -%}optional{%- else -%}plain{%- endif -%}
+    {%- endmacro %}
+
+    {% macro render_cluster(row, tier_class) -%}
+      {%- set vm = row.get("value_mapped") or {} -%}
+      {%- set title = vm.get("title_zh") or row.get("primary_title") or "（无标题）" -%}
+      <article class="cluster {{ tier_class }}">
+        {% if row.get("badges") %}
+        <div class="badges">
+          {% for badge in row.get("badges") or [] %}
+          <span class="badge {{ tier_badge_class(row, badge) }}">{{ badge }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <h3>{{ title }}</h3>
+        {% if vm.get("key_tags") %}
+        <div class="tags">{% for tag in vm.get("key_tags") or [] %}#{{ tag }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+        {% endif %}
+        <div class="block">
+          <div class="block-label">{{ L.get("source_metadata", "重点信息") }}</div>
+          <ul class="meta-list">
+            <li>来源：{{ row.get("primary_source_name", "—") }}</li>
+            {% if row.get("primary_url") %}<li>原文链接：<a href="{{ row.get("primary_url") }}" target="_blank" rel="noreferrer">{{ row.get("primary_url") }}</a></li>{% endif %}
+            {% if row.get("latest_published_at") %}<li>发布时间：{{ row.get("latest_published_at")[:10] }}</li>{% endif %}
+            <li>评分：{{ "%.1f"|format(row.get("final_score") or 0) }}{% if (row.get("member_count") or 1) > 1 %} · {{ row.get("member_count") }} 个信源覆盖{% endif %}</li>
+            {% if row.get("priority_reason") %}<li>筛选理由：{{ row.get("priority_reason") }}</li>{% endif %}
+          </ul>
+        </div>
+
+        {% if vm.get("core_content") %}
+        <div class="block">
+          <div class="block-label">{{ L.get("core_content", "核心内容") }}</div>
+          <ul class="bullets">
+            {% for b in vm.get("core_content") or [] %}<li>{{ b }}</li>{% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if row.get("reader_blocks") %}
+        <div class="block">
+          <div class="block-label">{{ L.get("reader_value", "💡 对读者的价值") }}</div>
+          {% for vb in row.get("reader_blocks") or [] %}
+          <div class="persp reader">
+            <span class="angle-tag">{{ reader_angle_label.get(vb.get("angle"), vb.get("angle", "—")) }}</span>
+            <div>{{ vb.get("body", "") }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if row.get("audience_blocks") %}
+        <div class="block">
+          <div class="block-label">{{ L.get("audience_value", "🎯 对目标受众的价值") }}</div>
+          {% for vb in row.get("audience_blocks") or [] %}
+          <div class="persp audience">
+            <span class="angle-tag">{{ audience_angle_label.get(vb.get("angle"), vb.get("angle", "—")) }}</span>
+            <div>{{ vb.get("body", "") }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if pillars_enabled and vm.get("pillars") %}
+        <div class="pillar-row"><strong>{{ L.get("pillars", "📚 内容支柱归位") }}：</strong>{{ row.get("pillars_display") }}</div>
+        {% endif %}
+        {% if row.get("is_followup") and vm.get("followup_note") %}
+        <div class="pillar-row"><strong>续报：</strong>{{ vm.get("followup_note") }}</div>
+        {% endif %}
+        {% if (row.get("member_count") or 1) > 1 %}
+        <div class="pillar-row"><strong>{{ L.get("other_sources", "其他来源") }}：</strong>共 {{ row.get("member_count") }} 个信源覆盖该主题。</div>
+        {% endif %}
+        {% if vm.get("reading_suggestion") %}
+        <div class="reading-tip"><strong>{{ L.get("reading_suggestion", "阅读建议") }}：</strong>{{ vm.get("reading_suggestion") }}</div>
+        {% endif %}
+        {% if row.get("degraded") or (vm.get("warnings") or []) %}
+        <div class="degraded"><strong>质量提示：</strong>{{ row.get("warnings_short") or "该条目为降级产物" }}</div>
+        {% endif %}
+      </article>
+    {%- endmacro %}
+
+    {% if must_read %}
+    <section class="section">
+      <div class="section-title"><span>必读</span><span class="section-count">{{ must_read | length }}</span></div>
+      {% for row in must_read %}{{ render_cluster(row, "must") }}{% endfor %}
+    </section>
+    {% endif %}
+
+    {% if recommended %}
+    <section class="section">
+      <div class="section-title"><span>推荐</span><span class="section-count">{{ recommended | length }}</span></div>
+      {% for row in recommended %}{{ render_cluster(row, "recommended") }}{% endfor %}
+    </section>
+    {% endif %}
+
+    {% if optional %}
+    <section class="section">
+      <div class="section-title"><span>可选</span><span class="section-count">{{ optional | length }}</span></div>
+      {% for row in optional %}{{ render_cluster(row, "optional") }}{% endfor %}
+    </section>
+    {% endif %}
+
+    {% macro render_others_rows(rows) -%}
+      {% for row in rows %}
+        {%- set vm = row.get("value_mapped") or {} -%}
+        {%- set title = row.get("title_zh_others") or vm.get("title_zh") or row.get("primary_title") or row.get("title") or "—" -%}
+        {%- set cc = vm.get("core_content") or [] -%}
+        {%- set gist = row.get("gist_zh_others") or (cc[0] if cc else row.get("primary_gist")) or "—" -%}
+        {%- set notes = [] -%}
+        {%- if row.get("tier_adjusted_reason") or row.get("auto_demoted_reason") -%}{%- set _ = notes.append("原 " ~ row.get("original_tier_label", row.get("original_tier")) ~ " 降级") -%}{%- endif -%}
+        {%- if row.get("auto_demoted_reason") -%}{%- set _ = notes.append(row.get("auto_demoted_reason_label", row.get("auto_demoted_reason"))) -%}{%- endif -%}
+        {%- if row.get("is_stale") -%}{%- set _ = notes.append("过窗") -%}{%- endif -%}
+        {%- if (row.get("spam_confidence") or 0) >= 0.6 -%}{%- set _ = notes.append("疑似水文") -%}{%- endif -%}
+        {%- if row.get("is_followup") -%}{%- set _ = notes.append("续报") -%}{%- endif -%}
+        <tr>
+          <td>{{ row.get("primary_source_name", "—") }}</td>
+          <td><strong>{% if row.get("primary_url") %}<a href="{{ row.get("primary_url") }}" target="_blank" rel="noreferrer">{{ title }}</a>{% else %}{{ title }}{% endif %}</strong></td>
+          <td>{{ gist | truncate(100, end="…") }}</td>
+          <td>{{ notes | join(" · ") or "—" }}</td>
+        </tr>
+      {% endfor %}
+    {%- endmacro %}
+
+    {% if others %}
+    <section class="section">
+      <div class="section-title"><span>其他信息</span><span class="section-count">{{ others | length }}</span></div>
+      {% if others_demoted %}
+      <div class="others-group-title">自动降级 / {{ others_demoted | length }}</div>
+      <div class="others-wrap"><table><thead><tr><th>来源</th><th>标题</th><th>内容重点</th><th>备注</th></tr></thead><tbody>{{ render_others_rows(others_demoted) }}</tbody></table></div>
+      {% endif %}
+      {% if others_fresh %}
+      <div class="others-group-title">低相关新信息 / {{ others_fresh | length }}</div>
+      <div class="others-wrap"><table><thead><tr><th>来源</th><th>标题</th><th>内容重点</th><th>备注</th></tr></thead><tbody>{{ render_others_rows(others_fresh) }}</tbody></table></div>
+      {% endif %}
+      {% if others_stale %}
+      <div class="others-group-title">过窗信息 / {{ others_stale | length }}</div>
+      <div class="others-wrap"><table><thead><tr><th>来源</th><th>标题</th><th>内容重点</th><th>备注</th></tr></thead><tbody>{{ render_others_rows(others_stale) }}</tbody></table></div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section class="section">
+      <div class="section-title"><span>信源状态</span><span class="section-count">RSS</span></div>
+      {% set fresh = source_health.get("fresh") or [] %}
+      {% set no_new = source_health.get("no_new_items") or [] %}
+      {% set stale = source_health.get("stale") or [] %}
+      {% set irregular = source_health.get("irregular") or [] %}
+      {% set dead = source_health.get("dead") or [] %}
+      {% set total_registered = (fresh | length) + (no_new | length) + (stale | length) + (irregular | length) + (dead | length) %}
+      <div class="sources">
+        <div class="source-row"><div class="source-label">今日有更新 / {{ fresh | length }} / {{ total_registered }}</div><div class="source-value">{{ fresh | join(" · ") or "—" }}</div></div>
+        <div class="source-row"><div class="source-label">今日无新内容 / {{ no_new | length }} / {{ total_registered }}</div><div class="source-value">{{ no_new | join(" · ") or "—" }}</div></div>
+        {% if stale %}<div class="source-row"><div class="source-label">近期活跃但今日无更新 / {{ stale | length }}</div><div class="source-value">{{ stale | join(" · ") }}</div></div>{% endif %}
+        {% if irregular or dead %}<div class="source-row"><div class="source-label">健康告警</div><div class="source-value">{{ (irregular + dead) | join(" · ") }}</div></div>{% endif %}
+      </div>
+    </section>
+
+    <footer class="colophon">
+      生成时间：{{ now_str }} · 日期：{{ date }} · 共 {{ total_clusters }} 条信息<br>
+      处理链路：抓取 → 去重 → 筛选 → 价值判断 → 今日格局 → 渲染
+    </footer>
+  </main>
+</body>
+</html>

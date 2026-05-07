@@ -1,0 +1,75 @@
+{
+  "version": "1.0",
+  "locale": "zh-CN",
+  "output_language": "zh",
+  "report_title": "今日简报",
+  "report_subtitle": "Configurable Public-Source Daily Brief",
+  "html_theme": "light",
+  "html_theme_choices": ["light", "dark"],
+  "outputs": {
+    "formats": ["markdown", "html"],
+    "directory": "outputs/daily-brief"
+  },
+  "lifecycle": {
+    "mode": "demo",
+    "stable_daily_steps": ["0", "1", "2", "3", "3b", "4", "5", "6"],
+    "setup_only_steps": ["-2", "-1"],
+    "tuning_only_steps": ["7", "8"]
+  },
+  "outlook": {
+    "style": "strategic_synthesis",
+    "min_items": 2,
+    "max_items": 5,
+    "include_content_pillars": false
+  },
+  "report_length": {
+    "max_must_read": 3,
+    "max_recommended": 5,
+    "max_optional": 10,
+    "show_other_table": true
+  },
+  "source_recommendation": {
+    "enabled_when_sources_missing": true,
+    "starter_pack_size": 8,
+    "include_source_types": ["rss", "newsletter", "blog", "podcast"],
+    "mix": {
+      "core_authority": 0.4,
+      "applied_practice": 0.3,
+      "counter_signal": 0.15,
+      "broad_discovery": 0.15
+    },
+    "require_user_review_before_fetch": true
+  },
+  "feedback": {
+    "status": "demo",
+    "last_reviewed_at": null,
+    "open_items": [],
+    "automation_ready": false
+  },
+  "automation": {
+    "enabled": false,
+    "schedule": "daily",
+    "requires_stable_feedback": true,
+    "run_healthcheck_before_report": true
+  },
+  "labels": {
+    "outlook": "今日格局",
+    "reader_value": "💡 对读者的价值",
+    "audience_value": "🎯 对目标受众的价值",
+    "pillars": "📚 内容支柱归位",
+    "source_metadata": "重点信息",
+    "core_content": "核心内容",
+    "reading_suggestion": "阅读建议",
+    "other_sources": "其他来源",
+    "source_health": "信源状态"
+  },
+  "features": {
+    "audience_view": true,
+    "pillar_mapping": false,
+    "translate_others_to_output_language": true
+  },
+  "html": {
+    "max_width_px": 720,
+    "show_terminal_bar": true
+  }
+}
