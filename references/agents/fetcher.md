@@ -26,6 +26,10 @@
 
 **硬性原则**：Fetcher **永远不做有损摘要**。原文永远落 `full_content`。
 
+### `rss_summary` 字段契约
+
+`rss_summary` 只保存 RSS / Atom entry 原生 `summary` 或 `description` 的清洗文本；它不是模型生成摘要，也不代表全文。非 RSS 路径、抓取失败或 feed 未提供摘要时写 `null`。
+
 ### `compressed_summary` 字段契约
 
 `raw_items.jsonl` 每行均有 `compressed_summary` 字段，Fetcher 阶段**恒为 `null`**（占位保持 schema 稳定，下游读取无需分支判断）。Fetcher 是纯 Python，不调模型。当主 Agent 在 Step 4 打包 VM 输入时发现 `primary.full_content_tokens + Σ members[].full_content_tokens > 18000`，对 members 做一次轻量压缩（见 `value-mapper-schema.md §5 输入打包规则`），压缩文本作为临时变量写入传给 VM 的单 cluster JSON，**不回写** `raw_items.jsonl`。
@@ -47,6 +51,7 @@
   "content_type": "blog_post",
   "full_content": "...",
   "full_content_tokens": 3200,
+  "rss_summary": "...",
   "compressed_summary": null,
   "fetch_status": "ok",
   "fetch_error": null,

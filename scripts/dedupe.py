@@ -18,6 +18,8 @@ from simhash import Simhash, SimhashIndex
 
 SIMHASH_K = 3  # 海明距离阈值
 TOKEN_RE = re.compile(r"[A-Za-z]+|[\u4e00-\u9fff]")
+CONTENT_EXCERPT_CHARS = 500
+RSS_SUMMARY_INDEX_CHARS = 800
 
 
 def tokens(text: str) -> list[str]:
@@ -31,6 +33,18 @@ def item_signature(item: dict[str, Any]) -> str:
     title = item.get("original_title") or ""
     body = (item.get("full_content") or "")[:1200]
     return f"{title}\n{body}"
+
+
+def compact_text(text: str | None, max_chars: int) -> str | None:
+    """Collapse whitespace and return a bounded excerpt for lightweight indexes."""
+    if not text:
+        return None
+    compacted = re.sub(r"\s+", " ", text).strip()
+    if not compacted:
+        return None
+    if len(compacted) <= max_chars:
+        return compacted
+    return compacted[:max_chars].rstrip() + "…"
 
 
 def build_clusters(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -101,7 +115,7 @@ def summarize_cluster(cluster: list[dict[str, Any]], idx: int) -> dict[str, Any]
 
 
 def cluster_index_row(full: dict[str, Any]) -> dict[str, Any]:
-    """给 Scorer 的精简元信息（不含 full_content）。"""
+    """给 Scorer 的轻量索引；只含元信息、RSS 摘要和正文摘录，不含完整 full_content。"""
     p = full["primary"]
     return {
         "cluster_id": full["cluster_id"],
@@ -116,6 +130,8 @@ def cluster_index_row(full: dict[str, Any]) -> dict[str, Any]:
         "earliest_published_at": full["earliest_published_at"],
         "latest_published_at": full["latest_published_at"],
         "primary_tokens": int(p.get("full_content_tokens") or 0),
+        "rss_summary": compact_text(p.get("rss_summary"), RSS_SUMMARY_INDEX_CHARS),
+        "content_excerpt": compact_text(p.get("full_content"), CONTENT_EXCERPT_CHARS),
     }
 
 

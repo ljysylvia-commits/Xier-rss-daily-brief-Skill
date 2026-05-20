@@ -11,7 +11,7 @@
 Step 0  Run Dir + Cleanup     [Python]   tmp/YYYY-MM-DD/ + 删除 7 天前 dated run dirs
 Step 1  Fetcher              [Python]   sources.md → tmp/YYYY-MM-DD/raw_items.jsonl
 Step 2  Deduper              [Python]   SimHash + 标题相似度 → tmp/YYYY-MM-DD/clusters/{id}.json + clusters_index.json
-Step 3  Scorer               [AI × 1]   PROFILE + scoring_profile + clusters_index → scored.json（tier 分档）
+Step 3  Scorer               [AI × 1]   PROFILE + scoring_profile + clusters_index（含轻量摘要/摘录）→ scored.json（tier 分档）
 Step 4a Value-Mapper · Reader [AI × N]  PROFILE + sources + perspectives/reader.md + cluster → value_mapped_reader/{id}.json
 Step 4b Value-Mapper · Audience [AI × N] PROFILE + sources + perspectives/audience.md + cluster + reader 产物
                                          → value_mapped_audience/{id}.json
@@ -33,7 +33,7 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 |---|---|---|---|
 | 0 Run Dir + Cleanup | `tmp/` | `tmp/YYYY-MM-DD/run_context.json`；删除 7 天前 dated run dirs | `scripts/cleanup_tmp.py` |
 | 1 Fetcher | `sources.md` | `${RUN_DIR}/raw_items.jsonl` · `${RUN_DIR}/fetcher.log` | `agents/fetcher.md` |
-| 2 Deduper | `${RUN_DIR}/raw_items.jsonl` | `${RUN_DIR}/clusters/{id}.json` · `${RUN_DIR}/clusters_index.json` | `scripts/dedupe.py::cluster_index_row`（源代码即契约） |
+| 2 Deduper | `${RUN_DIR}/raw_items.jsonl` | `${RUN_DIR}/clusters/{id}.json` · `${RUN_DIR}/clusters_index.json` | `scripts/dedupe.py::cluster_index_row`（源代码即契约）· `references/scorer_input_contract.md` |
 | 3 Scorer | `PROFILE.md` · `references/scoring_profile.json` · `${RUN_DIR}/clusters_index.json` | `${RUN_DIR}/scored.json` | `agents/scorer.md §5` Prompt「对每个 cluster 产出」段 |
 | 4a Reader VM | `PROFILE.md` · `sources.md` · `perspectives/reader.md` · `${RUN_DIR}/clusters/{id}.json` + scored 切片 | `${RUN_DIR}/value_mapped_reader/{id}.json` | `agents/value-mapper-schema.md §1.1 / §2.1` |
 | 4b Audience VM | `PROFILE.md` · `sources.md` · `perspectives/audience.md` · `${RUN_DIR}/clusters/{id}.json` · `${RUN_DIR}/value_mapped_reader/{id}.json` | `${RUN_DIR}/value_mapped_audience/{id}.json` | `agents/value-mapper-schema.md §1.2 / §2.2` |
@@ -66,6 +66,7 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 - 早期压缩会丢 VM 需要的原始数字 / 机制 → `full_content` 永远保留
 - `compressed_summary` 仅作"总输入超阈值"的降级备份
 - Fetcher 不读 PROFILE，不做价值判断，职责只抓取
+- `rss_summary` 只保存 RSS / Atom 原生摘要，不是模型摘要；`content_excerpt` 由 Deduper 从 `primary.full_content` 确定性截取，供 Scorer 做轻量判断
 
 ### 3.4 为什么 Writer 是 Python 模板而非 AI
 
@@ -102,7 +103,7 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 1. 所有 Agent 间通信只走**文件**；主 Agent 不传递内存对象
 2. 任何 Agent 写文件前必须**先写 `.tmp` 再 rename**（原子性）
 3. Value-Mapper 只看单 cluster；禁止跨 cluster 综合（综合归 Outlook-Curator）
-4. Scorer 不碰 `full_content`；只读 `clusters_index.json`
+4. Scorer 不碰完整 `full_content`；只读 `clusters_index.json` 中的元信息、`rss_summary` 和 `content_excerpt`
 5. Fetcher 不碰 `PROFILE.md`；价值判断下沉到 Scorer / Value-Mapper
 6. Writer 不调 AI；全本地渲染
 7. 禁用词黑名单（"值得关注"、"意义重大"、"反思了"、"做出了重大"、"具有深远"、"十分重要"、"带来了根本性"）在 Reader VM / Audience VM / Outlook-Curator 必须 lint

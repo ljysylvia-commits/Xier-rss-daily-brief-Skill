@@ -66,6 +66,7 @@ Xier 的可配置公开信源日报 Skill，用来帮不同用户建立自己的
 |---|---|
 | `references/PROFILE.md` | demo 用户画像，生产使用前应替换 |
 | `references/scoring_profile.json` | Scorer 使用的结构化评分规则 |
+| `references/scorer_input_contract.md` | Scorer 轻量输入字段 `rss_summary` / `content_excerpt` 的来源和边界 |
 | `references/angle_config.json` | Reader/Audience angle key 与中文 label |
 | `references/sources.md` | demo 信源列表，生产使用前应替换或重新生成 |
 | `config/report_config.json` | 输出语言、格式、HTML 主题、功能开关 |

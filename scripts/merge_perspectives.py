@@ -74,6 +74,7 @@ BANNED_PHRASES = [
 
 BODY_MIN_CHARS = 28
 BODY_MAX_CHARS = 110
+CONTENT_MODES = {"single_article", "roundup_digest", "transcript_long", "sparse_short"}
 
 
 def load_json(p: Path) -> Any:
@@ -173,6 +174,81 @@ def lint_block(
     return ok
 
 
+def lint_reader_contract(reader_vm: dict[str, Any] | None, warnings: list[dict[str, Any]]) -> None:
+    """Lint Reader VM base fields that are not value_blocks.
+
+    These checks intentionally warn instead of dropping the entry. Their goal is
+    to catch coverage risks such as long digest content being summarized from
+    the opening paragraph only.
+    """
+    if not reader_vm:
+        return
+
+    mode = reader_vm.get("content_mode")
+    if not mode:
+        warnings.append({
+            "type": "missing_content_mode",
+            "where": "reader_vm",
+            "reason": "Reader VM 必须产出 content_mode",
+        })
+        return
+    if mode not in CONTENT_MODES:
+        warnings.append({
+            "type": "invalid_content_mode",
+            "where": "reader_vm",
+            "reason": f"content_mode {mode!r} 不在枚举集 {sorted(CONTENT_MODES)}",
+        })
+        return
+
+    if mode != "roundup_digest":
+        return
+
+    section_scan = reader_vm.get("section_scan")
+    if not isinstance(section_scan, list) or not section_scan:
+        warnings.append({
+            "type": "missing_section_scan",
+            "where": "reader_vm",
+            "reason": "roundup_digest 必须产出 section_scan",
+        })
+        return
+
+    if len(section_scan) < 3:
+        warnings.append({
+            "type": "insufficient_section_scan",
+            "where": "reader_vm",
+            "reason": f"roundup_digest 的 section_scan 只有 {len(section_scan)} 条，少于 3 条",
+        })
+
+    selected = [s for s in section_scan if isinstance(s, dict) and s.get("selection_decision") == "selected"]
+    if not selected:
+        warnings.append({
+            "type": "no_selected_section",
+            "where": "reader_vm",
+            "reason": "roundup_digest 的 section_scan 至少需要 1 条 selected section",
+        })
+
+    core_content = reader_vm.get("core_content") or []
+    first_core = core_content[0] if core_content else ""
+    has_coverage_statement = (
+        ("多主题" in first_core or "聚合" in first_core or "digest" in first_core.lower())
+        and ("本日报" in first_core or "选取" in first_core or "选择" in first_core or "主线" in first_core)
+    )
+    if not has_coverage_statement:
+        warnings.append({
+            "type": "coverage_statement_missing",
+            "where": "reader_vm.core_content[0]",
+            "reason": "roundup_digest 的 core_content 第一条应说明多主题聚合及本日报选取的主线",
+        })
+
+    for idx, item in enumerate(core_content):
+        if isinstance(item, str) and "摘要提到" in item:
+            warnings.append({
+                "type": "source_wording_risk",
+                "where": f"reader_vm.core_content[{idx}]",
+                "reason": "roundup_digest 已读 full_content 时不应笼统写“摘要提到”；应说明来自正文 section 或该 issue 的主线",
+            })
+
+
 def merge_single(
     reader_vm: dict[str, Any] | None,
     audience_vm: dict[str, Any] | None,
@@ -197,6 +273,8 @@ def merge_single(
         },
         "title_zh": (reader_vm or {}).get("title_zh") or "",
         "key_tags": (reader_vm or {}).get("key_tags") or [],
+        "content_mode": (reader_vm or {}).get("content_mode") or "",
+        "section_scan": (reader_vm or {}).get("section_scan") or [],
         "core_content": (reader_vm or {}).get("core_content") or [],
         "reading_suggestion": (reader_vm or {}).get("reading_suggestion") or "",
         "value_blocks": [],
@@ -206,6 +284,7 @@ def merge_single(
     }
 
     # ---- Reader value_blocks ----
+    lint_reader_contract(reader_vm, warnings)
     reader_blocks_raw = (reader_vm or {}).get("value_blocks") or []
     reader_blocks: list[dict[str, Any]] = []
     for idx, b in enumerate(reader_blocks_raw):

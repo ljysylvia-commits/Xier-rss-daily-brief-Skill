@@ -26,6 +26,7 @@ REQUIRED_FILES = [
     "references/feedback_loop.md",
     "references/prompt_hygiene.md",
     "references/scoring_profile.json",
+    "references/scorer_input_contract.md",
     "references/angle_config.json",
     "references/EXAMPLE.md",
     "assets/daily.md.j2",

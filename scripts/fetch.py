@@ -79,6 +79,7 @@ class RawItem:
     content_type: str
     full_content: str | None
     full_content_tokens: int
+    rss_summary: str | None
     compressed_summary: str | None
     fetch_status: str
     fetch_error: str | None
@@ -468,6 +469,7 @@ def fetch_rss(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
             content_type=guess_content_type(src),
             full_content=full_text,
             full_content_tokens=rough_token_count(full_text),
+            rss_summary=summary_text,
             compressed_summary=None,
             fetch_status="ok",
             fetch_error=None,
@@ -500,6 +502,7 @@ def fetch_web(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
         content_type=guess_content_type(src),
         full_content=full_text,
         full_content_tokens=rough_token_count(full_text),
+        rss_summary=None,
         compressed_summary=None,
         fetch_status=fetch_status,
         fetch_error=warning,
@@ -540,6 +543,7 @@ def make_failed_item(src: Source, err: str, now: datetime) -> RawItem:
         content_type=guess_content_type(src),
         full_content=None,
         full_content_tokens=0,
+        rss_summary=None,
         compressed_summary=None,
         fetch_status=classify_error(err),
         fetch_error=err[:200],
@@ -747,6 +751,7 @@ def fetch_archive(
                 content_type=guess_content_type(src),
                 full_content=full_text,
                 full_content_tokens=rough_token_count(full_text),
+                rss_summary=None,
                 compressed_summary=None,
                 fetch_status="content_extraction_failed" if warning == "boilerplate_only" else "ok",
                 fetch_error=warning,

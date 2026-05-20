@@ -32,6 +32,7 @@ description: Generate a configurable, noise-reducing daily brief with Xier RSS D
 | `references/profile_onboarding.md` | 推导并确认用户画像、评分规则和价值视角 |
 | `references/PROFILE.md` | 用户画像、目标受众和评分偏好 |
 | `references/scoring_profile.json` | Scorer 使用的结构化评分规则 |
+| `references/scorer_input_contract.md` | `rss_summary` / `content_excerpt` 字段来源、边界和验证规则 |
 | `references/angle_config.json` | Reader/Audience angle key 与中文 label 的单一真相源 |
 | `references/sources.md` | 公开 RSS / archive / newsletter / podcast 信源表 |
 | `references/source_recommendation.md` | 用户没有信源时如何推荐初始信源 |
@@ -159,8 +160,8 @@ python3 scripts/dedupe.py \
 
 使用 AI：
 
-- system prompt: `references/PROFILE.md` + `references/scoring_profile.json` + `references/agents/scorer-rubric.md` + `references/agents/scorer.md`
-- user input: `${RUN_DIR}/clusters_index.json`
+- system prompt: `references/PROFILE.md` + `references/scoring_profile.json` + `references/scorer_input_contract.md` + `references/agents/scorer-rubric.md` + `references/agents/scorer.md`
+- user input: `${RUN_DIR}/clusters_index.json`（含轻量 `rss_summary` / `content_excerpt`，不含完整 `full_content`）
 - output: `${RUN_DIR}/scored.json`
 
 按 `references/agents/scorer.md` 校验 JSON。

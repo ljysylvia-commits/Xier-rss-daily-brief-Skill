@@ -20,6 +20,8 @@
     "input_tokens": 24131,
     "output_tokens": 1842
   },
+  "content_mode": "single_article",
+  "section_scan": [],
   "title_zh": "热风险仪表盘把脆弱街区排到规划优先级前面",
   "key_tags": ["Heat Risk", "Public Health", "Urban Planning", "Dashboard"],
   "core_content": [
@@ -95,6 +97,8 @@
         "audience_model": "claude-sonnet-4-5",
         "generated_at": "2026-04-26T07:30:00+08:00"
       },
+      "content_mode": "single_article",
+      "section_scan": [],
       "title_zh": "...",
       "key_tags": ["..."],
       "core_content": ["..."],
@@ -130,6 +134,13 @@
 | `meta.model` | string | ✅ | 子 Agent 运行时实际使用的模型 ID |
 | `meta.input_tokens` | number | ✅ | 输入 token 数（自报） |
 | `meta.output_tokens` | number | ✅ | 输出 token 数（自报） |
+| `content_mode` | string | ✅ | `single_article` / `roundup_digest` / `transcript_long` / `sparse_short` |
+| `section_scan` | array<object> | 条件必填 | `content_mode = roundup_digest` 时必填；至少 3 条，除非原文少于 3 个 section |
+| `section_scan[].section` | string | 条件必填 | section 标题或语义名 |
+| `section_scan[].summary` | string | 条件必填 | 该 section 的事实性短摘要 |
+| `section_scan[].relevance` | string | 条件必填 | `high` / `medium` / `low` |
+| `section_scan[].selection_decision` | string | 条件必填 | `selected` / `skipped` |
+| `section_scan[].reason` | string | 条件必填 | 选择或跳过原因，必须贴合读者画像 |
 | `title_zh` | string | ✅ | ≤ 60 中文字 |
 | `key_tags` | array<string> | ✅ | 长度 3-5 |
 | `core_content` | array<string> | ✅ | 长度 2-8 |
@@ -167,6 +178,7 @@
 - `pillars` 仅在 content pillars opt-in 时取自 Audience VM；默认应为空数组
 - `skipped_perspectives` 合并来自两侧 + merge 脚本的 dedup 记录
 - `warnings` 合并来自两侧 + merge 脚本的 lint 记录
+- `content_mode` / `section_scan` 由 Reader VM 透传到合并产物，仅用于 QA / debug，不进入日报渲染
 
 **tier = others 的 cluster 不调用 Value-Mapper**，但仍必须中文化。主 Agent 在 Writer 前生成 `${RUN_DIR}/others_translated.json`，为每个 `tier=others` cluster 提供 `title_zh` 与 `gist_zh`。Writer 渲染「其他信息」时不得直接显示英文 raw gist。VM 只处理 must_read / recommended / optional 三档。
 
@@ -193,6 +205,7 @@
 | 原文抓取失败 | core_content 第一条标注"原文抓取失败（{error_hint}）..."；value_blocks 降为 1 块；`warnings` 记 `fetch_failed` |
 | 无 angle 命中 | `value_blocks: []` + `skipped_perspectives: [{"视角": "reader", "原因": "..."}]` |
 | 输入 token degraded | 透传 warnings；对应 core_content 条末尾标注"（基于压缩摘要，细节可能遗漏）" |
+| `content_mode = roundup_digest` | 必须输出 `section_scan`；`core_content` 第一条说明这是多主题聚合以及本日报选取的主线 |
 
 ### 4.2 Audience VM
 
@@ -241,6 +254,9 @@ Pipeline 层编排降级（重试 / 超时中止 / VM 全失败处理）见 `../
 - Audience VM：不得出现 base 字段 / `perspective=reader` block
 - `core_content[]` 至少 1 条包含阿拉伯数字（或"首次 / 正式 GA / v3.0"等版本标识）—— 仅 Reader VM
 - `title_zh` 不含英文直译痕迹 —— 仅 Reader VM
+- Reader VM：`content_mode` 必填，且必须属于枚举集
+- Reader VM：`content_mode = roundup_digest` 时，`section_scan` 至少 3 条、至少 1 条 `selection_decision = "selected"`，且 `core_content[0]` 必须说明"多主题聚合 / 本日报选取主线"
+- Reader VM：`content_mode = roundup_digest` 时，`core_content[]` 不应出现"摘要提到"；若信息来自全文，应写"正文在 X section 中..."或"该 issue 将...归入..."
 
 Lint 失败：**单 Agent 输出重试 1 次，仍失败则标记该 cluster 为 `degraded` 并保留已有输出**（不回退整个 Pipeline）。
 

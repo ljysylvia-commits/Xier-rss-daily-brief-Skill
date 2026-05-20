@@ -1,6 +1,7 @@
 # Runtime outputs
 outputs/
 tmp/
+tests/
 
 # Python cache
 __pycache__/
@@ -15,4 +16,3 @@ venv/
 
 # macOS
 .DS_Store
-
