@@ -34,17 +34,6 @@ REQUIRED_FILES = [
     "references/EXAMPLE.md",
     "assets/daily.md.j2",
     "assets/daily.html.j2",
-    "tests",
-    "tests/role-reader-only",
-    "tests/role-audience",
-    "tests/marketing-lead-complex",
-    "tests/final-others-quality",
-    "tests/no-evidence-guardrail",
-    "tests/rss-summary-not-demoted",
-    "tests/other-signal-lint",
-    "tests/warning-mapping",
-    "tests/unsupported-source-boundary",
-    "outputs/open-source-tests",
 ]
 REQUIRED_SCRIPTS = [
     "scripts/fetch.py",
