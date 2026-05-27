@@ -638,8 +638,7 @@
       {% for row in rows %}
         {%- set vm = row.get("value_mapped") or {} -%}
         {%- set title = row.get("title_zh_others") or vm.get("title_zh") or row.get("primary_title") or row.get("title") or "—" -%}
-        {%- set cc = vm.get("core_content") or [] -%}
-        {%- set gist = row.get("gist_zh_others") or (cc[0] if cc else row.get("primary_gist")) or "—" -%}
+        {%- set gist = row.get("gist_zh_others") or "中文摘要缺失" -%}
         {%- set notes = [] -%}
         {%- if row.get("tier_adjusted_reason") or row.get("auto_demoted_reason") -%}{%- set _ = notes.append("原 " ~ row.get("original_tier_label", row.get("original_tier")) ~ " 降级") -%}{%- endif -%}
         {%- if row.get("auto_demoted_reason") -%}{%- set _ = notes.append(row.get("auto_demoted_reason_label", row.get("auto_demoted_reason"))) -%}{%- endif -%}
@@ -680,12 +679,14 @@
       {% set stale = source_health.get("stale") or [] %}
       {% set irregular = source_health.get("irregular") or [] %}
       {% set dead = source_health.get("dead") or [] %}
-      {% set total_registered = (fresh | length) + (no_new | length) + (stale | length) + (irregular | length) + (dead | length) %}
+      {% set unsupported = source_health.get("unsupported") or [] %}
+      {% set total_registered = (fresh | length) + (no_new | length) + (stale | length) + (irregular | length) + (dead | length) + (unsupported | length) %}
       <div class="sources">
         <div class="source-row"><div class="source-label">今日有更新 / {{ fresh | length }} / {{ total_registered }}</div><div class="source-value">{{ fresh | join(" · ") or "—" }}</div></div>
         <div class="source-row"><div class="source-label">今日无新内容 / {{ no_new | length }} / {{ total_registered }}</div><div class="source-value">{{ no_new | join(" · ") or "—" }}</div></div>
         {% if stale %}<div class="source-row"><div class="source-label">近期活跃但今日无更新 / {{ stale | length }}</div><div class="source-value">{{ stale | join(" · ") }}</div></div>{% endif %}
         {% if irregular or dead %}<div class="source-row"><div class="source-label">健康告警</div><div class="source-value">{{ (irregular + dead) | join(" · ") }}</div></div>{% endif %}
+        {% if unsupported %}<div class="source-row"><div class="source-label">不支持的信源</div><div class="source-value">{{ unsupported | join(" · ") }}</div></div>{% endif %}
       </div>
     </section>
 

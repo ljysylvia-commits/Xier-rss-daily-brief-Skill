@@ -28,7 +28,7 @@ Xier 的可配置公开信源日报 Skill，用来帮不同用户建立自己的
 - 提供 `light`（明亮版）和 `dark`（黑夜版）两种 HTML 主题
 - 将用户反馈沉淀为配置、评分规则或模板调整
 
-不支持登录、cookie、验证码、付费墙、X / Twitter、微信、小红书、TikTok 等反爬或平台 API 工作流。
+不支持登录、cookie、验证码、付费墙、X / Twitter、微信、小红书、TikTok 等反爬或平台 API 工作流。运行中遇到 X / Twitter URL 会记录为 `unsupported_source_type`，不写入 `raw_items.jsonl`，不进入日报或 Other Signals；source 级 URL 会在信源状态中显示为“不支持的信源”。
 
 ## Agent 兼容
 
@@ -161,11 +161,52 @@ references/sources.md
 Step 0  准备运行目录
 Step 1  抓取公开信源
 Step 2  去重聚类
-Step 3  用 AI 评分
-Step 3b 翻译低相关条目
+Step 3  用 AI 评分 + deterministic guardrail
 Step 4  映射读者 / 目标受众价值
+Step 4d 生成 Final Other Signals 中文摘要
 Step 5  生成今日判断
 Step 6  渲染 Markdown / HTML
+```
+
+Skill Graph：
+
+```mermaid
+flowchart TD
+  S["sources.md"] --> F["Step 1 Fetcher"]
+  F --> RAW["raw_items.jsonl"]
+  RAW --> D["Step 2 Deduper"]
+  D --> CI["clusters_index.json"]
+  CI --> SC["Step 3 Scorer"]
+  SC --> SG["apply_scoring_guardrails.py"]
+  SG --> SCORED["scored.json"]
+  RC["report_config.json"] --> RP["report_config length projection"]
+  SCORED --> RP
+  CI --> VM1["Step 4a Reader VM"]
+  SCORED --> VM1
+  VM1 --> VR["value_mapped_reader/*.json"]
+  CI --> VM2["Step 4b Audience VM"]
+  SCORED --> VM2
+  VR --> VM2
+  VM2 --> VA["value_mapped_audience/*.json"]
+  VR --> M["Step 4c merge_perspectives.py"]
+  VA --> M
+  SCORED --> M
+  M --> V["value_mapped.json"]
+  CI --> OI["Step 4d build_other_signal_inputs.py"]
+  RP --> OI
+  V --> OI
+  OI --> OIN["other_signal_inputs.json"]
+  OIN --> OS["Step 4d other-signal-summarizer"]
+  OS --> OTR["others_translated.json"]
+  V --> OC["Step 5 Outlook"]
+  OC --> OUT["outlook.json"]
+  CI --> W["Step 6 Writer"]
+  SCORED --> W
+  V --> W
+  OUT --> W
+  OTR --> W
+  W --> MD["YYYY-MM-DD.md"]
+  W --> HTML["YYYY-MM-DD.html"]
 ```
 
 首次配置和调优会使用额外步骤：
@@ -205,9 +246,28 @@ python3 scripts/dedupe.py \
 
 ```text
 ${RUN_DIR}/scored.json
-${RUN_DIR}/others_translated.json
 ${RUN_DIR}/value_mapped.json
 ${RUN_DIR}/outlook.json
+```
+
+Scorer 输出后运行 guardrail：
+
+```bash
+python3 scripts/apply_scoring_guardrails.py \
+  --clusters-index "${RUN_DIR}/clusters_index.json" \
+  --scored "${RUN_DIR}/scored.json" \
+  --output "${RUN_DIR}/scored.json"
+```
+
+Value mapping 合并后生成 Final Other Signals 输入包，并由 `other-signal-summarizer` 子 Agent 生成 `${RUN_DIR}/others_translated.json`：
+
+```bash
+python3 scripts/build_other_signal_inputs.py \
+  --clusters-index "${RUN_DIR}/clusters_index.json" \
+  --scored "${RUN_DIR}/scored.json" \
+  --value-mapped "${RUN_DIR}/value_mapped.json" \
+  --report-config config/report_config.json \
+  --output "${RUN_DIR}/other_signal_inputs.json"
 ```
 
 渲染：
@@ -234,7 +294,8 @@ python3 scripts/render.py \
 
 ```bash
 python3 scripts/healthcheck.py --root .
-python3 -m py_compile scripts/render.py scripts/merge_perspectives.py scripts/healthcheck.py scripts/fetch.py scripts/dedupe.py scripts/cleanup_tmp.py scripts/archive_adapters.py
+python3 scripts/run_contract_tests.py
+python3 -m py_compile scripts/render.py scripts/merge_perspectives.py scripts/healthcheck.py scripts/fetch.py scripts/dedupe.py scripts/cleanup_tmp.py scripts/archive_adapters.py scripts/apply_scoring_guardrails.py scripts/build_other_signal_inputs.py scripts/run_contract_tests.py
 ```
 
 ## 输出和缓存

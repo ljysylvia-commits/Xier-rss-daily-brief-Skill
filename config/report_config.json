@@ -12,7 +12,7 @@
   },
   "lifecycle": {
     "mode": "demo",
-    "stable_daily_steps": ["0", "1", "2", "3", "3b", "4", "5", "6"],
+    "stable_daily_steps": ["0", "1", "2", "3", "4", "4d", "5", "6"],
     "setup_only_steps": ["-2", "-1"],
     "tuning_only_steps": ["7", "8"]
   },

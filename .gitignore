@@ -1,7 +1,6 @@
 # Runtime outputs
 outputs/
 tmp/
-tests/
 
 # Python cache
 __pycache__/

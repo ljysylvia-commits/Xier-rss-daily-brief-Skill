@@ -55,6 +55,7 @@
 
 10. **打包前质量门槛**
     - 运行 `scripts/healthcheck.py --root .`。
+    - 运行 `scripts/run_contract_tests.py`。
     - 编译 Python scripts。
     - 确认 package 排除 `outputs/`、`tmp/`、`__pycache__/` 和 `.pyc`。
     - 抽查用户可见日报文本，确认可读且无内部语言泄漏。

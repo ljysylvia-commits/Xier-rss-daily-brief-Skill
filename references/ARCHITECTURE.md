@@ -5,25 +5,26 @@
 
 ---
 
-## 1 · 运行链路全景（6 步单遍 · Step 4 含 3 子步 · 每日 1 次）
+## 1 · 运行链路全景（6 步单遍 · Step 4 含 4 子步 · 每日 1 次）
 
 ```
 Step 0  Run Dir + Cleanup     [Python]   tmp/YYYY-MM-DD/ + 删除 7 天前 dated run dirs
 Step 1  Fetcher              [Python]   sources.md → tmp/YYYY-MM-DD/raw_items.jsonl
 Step 2  Deduper              [Python]   SimHash + 标题相似度 → tmp/YYYY-MM-DD/clusters/{id}.json + clusters_index.json
-Step 3  Scorer               [AI × 1]   PROFILE + scoring_profile + clusters_index（含轻量摘要/摘录）→ scored.json（tier 分档）
+Step 3  Scorer               [AI × 1 + Python guardrail] PROFILE + scoring_profile + clusters_index（含轻量摘要/摘录/证据状态）→ scored.json（tier 分档）
 Step 4a Value-Mapper · Reader [AI × N]  PROFILE + sources + perspectives/reader.md + cluster → value_mapped_reader/{id}.json
 Step 4b Value-Mapper · Audience [AI × N] PROFILE + sources + perspectives/audience.md + cluster + reader 产物
                                          → value_mapped_audience/{id}.json
 Step 4c Merge                 [Python]   reader + audience + dedup → value_mapped.json
+Step 4d Final Others 中文摘要 [Python + AI batch] scored + value_mapped + report_config → other_signal_inputs.json → others_translated.json
 Step 5  Outlook-Curator       [AI × 1]   PROFILE + value_mapped.json → outlook.json
-Step 6  Writer                [Python]   clusters + scored + value_mapped + outlook → YYYY-MM-DD.md
+Step 6  Writer                [Python]   clusters + scored + value_mapped + outlook + others_translated → YYYY-MM-DD.md/html
 ```
 
 **wall-clock 预期**：8-18 分钟（瓶颈：Fetcher 网络 I/O + Step 4a + Step 4b 两轮并行池串行）。
 
-**LLM 调用数**：`2×N + 2`（Reader × N + Audience × N + Scorer × 1 + Outlook × 1）。
-相比 v0.9 的 `N + 2`，Step 4 的 LLM 调用翻倍；但 prompt caching 命中后，Audience VM 静态前缀（PROFILE + sources + perspectives/audience.md）稳定，对 input token 影响可控。若高级启用 content pillars，才额外加入 pillar_config。
+**LLM 调用数**：Reader-only 为 `N + 3`，Audience-enabled 为 `2×N + 3`（Reader × N + Audience × N + Scorer × 1 + Final Others × 1 + Outlook × 1）。
+相比 v0.9 的 `N + 2`，Audience-enabled 下 Step 4 的 LLM 调用增加；但 prompt caching 命中后，Audience VM 静态前缀（PROFILE + sources + perspectives/audience.md）稳定，对 input token 影响可控。若高级启用 content pillars，才额外加入 pillar_config。
 
 ---
 
@@ -34,12 +35,13 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 | 0 Run Dir + Cleanup | `tmp/` | `tmp/YYYY-MM-DD/run_context.json`；删除 7 天前 dated run dirs | `scripts/cleanup_tmp.py` |
 | 1 Fetcher | `sources.md` | `${RUN_DIR}/raw_items.jsonl` · `${RUN_DIR}/fetcher.log` | `agents/fetcher.md` |
 | 2 Deduper | `${RUN_DIR}/raw_items.jsonl` | `${RUN_DIR}/clusters/{id}.json` · `${RUN_DIR}/clusters_index.json` | `scripts/dedupe.py::cluster_index_row`（源代码即契约）· `references/scorer_input_contract.md` |
-| 3 Scorer | `PROFILE.md` · `references/scoring_profile.json` · `${RUN_DIR}/clusters_index.json` | `${RUN_DIR}/scored.json` | `agents/scorer.md §5` Prompt「对每个 cluster 产出」段 |
+| 3 Scorer | `PROFILE.md` · `references/scoring_profile.json` · `${RUN_DIR}/clusters_index.json` | `${RUN_DIR}/scored.json` | `agents/scorer.md §5` Prompt「对每个 cluster 产出」段 · `scripts/apply_scoring_guardrails.py` |
 | 4a Reader VM | `PROFILE.md` · `sources.md` · `perspectives/reader.md` · `${RUN_DIR}/clusters/{id}.json` + scored 切片 | `${RUN_DIR}/value_mapped_reader/{id}.json` | `agents/value-mapper-schema.md §1.1 / §2.1` |
 | 4b Audience VM | `PROFILE.md` · `sources.md` · `perspectives/audience.md` · `${RUN_DIR}/clusters/{id}.json` · `${RUN_DIR}/value_mapped_reader/{id}.json` | `${RUN_DIR}/value_mapped_audience/{id}.json` | `agents/value-mapper-schema.md §1.2 / §2.2` |
 | 4c Merge | `${RUN_DIR}/value_mapped_reader/*.json` · `${RUN_DIR}/value_mapped_audience/*.json` · `${RUN_DIR}/scored.json` | `${RUN_DIR}/value_mapped.json` | `agents/value-mapper-schema.md §1.3 / §2.3` |
+| 4d Final Others 中文摘要 | `${RUN_DIR}/clusters_index.json` · `${RUN_DIR}/scored.json` · `${RUN_DIR}/value_mapped.json` · `config/report_config.json` | `${RUN_DIR}/other_signal_inputs.json` · `${RUN_DIR}/others_translated.json` | `scripts/build_other_signal_inputs.py` · `agents/other-signal-summarizer.md` |
 | 5 Outlook-Curator | `PROFILE.md` · `${RUN_DIR}/value_mapped.json` | `${RUN_DIR}/outlook.json` | `agents/outlook-curator.md` |
-| 6 Writer | 上述全部 + `${RUN_DIR}/*.log` + `${RUN_DIR}/run_context.json` | `./outputs/daily-brief/YYYY-MM-DD.md` · `./outputs/daily-brief/YYYY-MM-DD.html` | `assets/daily.md.j2` · `assets/daily.html.j2`（模板即契约） |
+| 6 Writer | 上述全部 + `${RUN_DIR}/others_translated.json` + `${RUN_DIR}/*.log` + `${RUN_DIR}/run_context.json` | `./outputs/daily-brief/YYYY-MM-DD.md` · `./outputs/daily-brief/YYYY-MM-DD.html` | `assets/daily.md.j2` · `assets/daily.html.j2`（模板即契约） |
 
 **硬性原则**：任何下游 Step 只读同名或上游写入的文件；禁止跨 Step 共享内存状态。所有 Agent 间通信走文件。
 
@@ -103,7 +105,7 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 1. 所有 Agent 间通信只走**文件**；主 Agent 不传递内存对象
 2. 任何 Agent 写文件前必须**先写 `.tmp` 再 rename**（原子性）
 3. Value-Mapper 只看单 cluster；禁止跨 cluster 综合（综合归 Outlook-Curator）
-4. Scorer 不碰完整 `full_content`；只读 `clusters_index.json` 中的元信息、`rss_summary` 和 `content_excerpt`
+4. Scorer 不碰完整 `full_content`；只读 `clusters_index.json` 中的元信息、`rss_summary`、`content_excerpt` 和证据状态字段
 5. Fetcher 不碰 `PROFILE.md`；价值判断下沉到 Scorer / Value-Mapper
 6. Writer 不调 AI；全本地渲染
 7. 禁用词黑名单（"值得关注"、"意义重大"、"反思了"、"做出了重大"、"具有深远"、"十分重要"、"带来了根本性"）在 Reader VM / Audience VM / Outlook-Curator 必须 lint
@@ -112,6 +114,8 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 10. **Perspective 字段强制（v0.10 新增）**：所有 `value_blocks[]` 必须有 `perspective ∈ {"reader", "audience"}` + `angle`（对应视角枚举集的 key）；日报渲染按 perspective 分组
 11. **Prompt hygiene**：配置、示例、反馈和稳定运行的提示词边界见 `references/prompt_hygiene.md`；不得把 demo 示例当用户画像，不得把内部 ID / lint key / raw path 渲染给用户
 12. **配置落盘优先**：评分规则只从 `scoring_profile.json` 注入 Scorer；价值视角枚举和中文标签只从 `angle_config.json` 注入 merge/render；stable 每日运行不得依赖聊天记忆。
+13. **Final Other Signals 摘要合同**：`scored.json` 原始 `tier=others`、VM `title_content_mismatch` 自动降级、以及 `report_config.report_length` 下放到 Other Signals 的 cluster 都必须进入 Step 4d 的 `others_translated.json`；`others_translated.json` 只输出 `cluster_id`、`title_zh`、`gist_zh`，来源、链接、备注由 Writer 从上游 metadata 合并。
+14. **Unsupported source boundary**：X/Twitter URL 属于开源版不支持输入；Fetcher / source boundary 记录 `unsupported_source_type`，不写入 `raw_items.jsonl`，不进入 Other Signals；source 级 URL 在信源状态中进入 `unsupported`，不归入 `no_new_items`。
 
 ---
 
@@ -123,7 +127,7 @@ Step 6  Writer                [Python]   clusters + scored + value_mapped + outl
 | 单条内容 < 200 字 | 1 | 仍产出，标记 `too_sparse`；Reader VM 降级为少条 core_content |
 | 长 transcript > 18K tokens | 1 | primary 保留 full_content；members 降级 compressed_summary |
 | 长 transcript > 主限 | 1 | primary 也 fallback；warning `degraded: primary_compressed` |
-| Scorer JSON 不合法 | 3 | 重试 1 次；仍失败则全档降为 `optional`，Writer 显示降级提示 |
+| Scorer JSON 不合法 | 3 | 重试 1 次；仍失败时，无正文证据 cluster 固定为 `others`；其他有证据 cluster 可降级为 `optional`；Writer 显示质量提示 |
 | 单 cluster Reader VM 超时 / Lint fail | 4a | 重试 1 次；仍失败则该 cluster 标 `degraded`；Step 4b 见到 Reader 缺失时该 cluster 按「仅 Reader 模式」（Audience 空）处理 |
 | 单 cluster Audience VM 超时 / Lint fail | 4b | 重试 1 次；仍失败则该 cluster 标 `audience_degraded`；merge 按「仅 Reader 模式」处理 |
 | Reader VM 全部失败 | 4a | 中止 Pipeline；Writer 只渲染「信源状态」+「其他信息」+ 告警段 |

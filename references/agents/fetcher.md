@@ -23,6 +23,7 @@
 | 播客（有 transcript） | 完整 transcript |
 | GitHub README / 工程博客 | 完整正文 |
 | 抓取失败 | `null`（`fetch_status` 标注具体错误类型）|
+| X/Twitter URL | 不写入 `raw_items.jsonl`；`fetcher.log` 记录 `unsupported_source_type=x_twitter` |
 
 **硬性原则**：Fetcher **永远不做有损摘要**。原文永远落 `full_content`。
 
@@ -55,6 +56,10 @@
   "compressed_summary": null,
   "fetch_status": "ok",
   "fetch_error": null,
+  "detail_fetch_status": "ok",
+  "detail_fetch_error": null,
+  "evidence_state": "content_available",
+  "content_warning": null,
   "freshness_state": "fresh|stale|irregular"
 }
 ```
@@ -65,7 +70,11 @@
 
 ### fetch_status 枚举
 
-`ok` · `http_4xx` · `http_5xx` · `timeout` · `parse_error` · `blocked`
+`ok` · `http_4xx` · `http_5xx` · `timeout` · `parse_error` · `blocked` · `content_extraction_failed`
+
+### unsupported source boundary
+
+开源版不处理 X/Twitter。`fetch.py` / source probe 识别 `x.com`、`twitter.com`、`mobile.twitter.com`、`nitter.*` 等 URL 后，写入 `fetcher.log` 的 `unsupported_source_type=x_twitter` 记录，并跳过该 source / item。此类 URL 不写入 `raw_items.jsonl`，不进入 Deduper、Scorer、Value-Mapper、Other Signals。source 级 URL 被跳过时，`freshness summary` 记录为 `unsupported`，不得归入 `no_new_items`。
 
 ---
 
@@ -87,6 +96,7 @@
 | `stale` | 48h-7d 无新条目但 7d 内有过 |
 | `irregular` | 7d-90d 无新条目 |
 | `dead` | > 90d 无新条目（主 Agent 层面告警建议下线） |
+| `unsupported` | 当前开源版不支持的 source URL 类型，已跳过 |
 
 freshness_state 写入每条 item 的同时，`${RUN_DIR}/fetcher.log` 汇总每个 source 的状态，供 Writer 渲染「信源状态」段。
 

@@ -48,8 +48,13 @@ def compact_text(text: str | None, max_chars: int) -> str | None:
 
 
 def build_clusters(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-    # 丢掉抓取失败且无内容的条目
-    candidates = [i for i in items if i.get("full_content") or (i.get("fetch_status") == "ok")]
+    # 保留正文抽取失败但仍有标题的条目，让 Scorer guardrail 能固定落到 others。
+    candidates = [
+        i for i in items
+        if i.get("full_content")
+        or (i.get("fetch_status") == "ok")
+        or (i.get("fetch_status") == "content_extraction_failed" and i.get("original_title"))
+    ]
 
     hashes: list[tuple[str, Simhash]] = []
     for it in candidates:
@@ -132,6 +137,12 @@ def cluster_index_row(full: dict[str, Any]) -> dict[str, Any]:
         "primary_tokens": int(p.get("full_content_tokens") or 0),
         "rss_summary": compact_text(p.get("rss_summary"), RSS_SUMMARY_INDEX_CHARS),
         "content_excerpt": compact_text(p.get("full_content"), CONTENT_EXCERPT_CHARS),
+        "fetch_status": p.get("fetch_status"),
+        "fetch_error": p.get("fetch_error"),
+        "detail_fetch_status": p.get("detail_fetch_status"),
+        "detail_fetch_error": p.get("detail_fetch_error"),
+        "evidence_state": p.get("evidence_state"),
+        "content_warning": p.get("content_warning"),
     }
 
 

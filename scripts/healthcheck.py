@@ -17,6 +17,8 @@ from pathlib import Path
 import httpx
 
 REQUIRED_FILES = [
+    ".gitignore",
+    "LICENSE",
     "config/report_config.json",
     "references/PROFILE.md",
     "references/run_modes.md",
@@ -27,12 +29,33 @@ REQUIRED_FILES = [
     "references/prompt_hygiene.md",
     "references/scoring_profile.json",
     "references/scorer_input_contract.md",
+    "references/agents/other-signal-summarizer.md",
     "references/angle_config.json",
     "references/EXAMPLE.md",
     "assets/daily.md.j2",
     "assets/daily.html.j2",
+    "tests",
+    "tests/role-reader-only",
+    "tests/role-audience",
+    "tests/marketing-lead-complex",
+    "tests/final-others-quality",
+    "tests/no-evidence-guardrail",
+    "tests/rss-summary-not-demoted",
+    "tests/other-signal-lint",
+    "tests/warning-mapping",
+    "tests/unsupported-source-boundary",
+    "outputs/open-source-tests",
 ]
-REQUIRED_SCRIPTS = ["scripts/fetch.py", "scripts/dedupe.py", "scripts/render.py", "scripts/cleanup_tmp.py"]
+REQUIRED_SCRIPTS = [
+    "scripts/fetch.py",
+    "scripts/dedupe.py",
+    "scripts/render.py",
+    "scripts/merge_perspectives.py",
+    "scripts/cleanup_tmp.py",
+    "scripts/apply_scoring_guardrails.py",
+    "scripts/build_other_signal_inputs.py",
+    "scripts/run_contract_tests.py",
+]
 REQUIRED_PKGS = ["feedparser", "readability", "httpx", "simhash", "jinja2", "dateutil", "bs4"]
 
 SOURCE_BLOCK_RE = re.compile(r"^\s*[-*]\s*(\{[^}]+\})\s*$", re.MULTILINE)
@@ -58,6 +81,60 @@ def check_files(root: Path) -> list[tuple[str, bool, str]]:
         p = root / rel
         out.append((rel, p.exists(), "ok" if p.exists() else "missing"))
     return out
+
+
+def check_other_signal_prompt(root: Path) -> list[tuple[str, bool, str]]:
+    path = root / "references" / "agents" / "other-signal-summarizer.md"
+    if not path.exists():
+        return [("other-signal-summarizer.x_mode_absent", False, "missing")]
+    text = path.read_text(encoding="utf-8")
+    forbidden = ["X Social 模式", "x_social_posts", "x_social_translated", "--x-social"]
+    hits = [item for item in forbidden if item in text]
+    return [("other-signal-summarizer.x_mode_absent", not hits, ",".join(hits) if hits else "ok")]
+
+
+def check_no_personal_x_artifacts(root: Path) -> list[tuple[str, bool, str]]:
+    forbidden_paths = [
+        "scripts/split_social_posts.py",
+        "x_social_posts.jsonl",
+        "x_social_translated.json",
+    ]
+    path_hits = [rel for rel in forbidden_paths if (root / rel).exists()]
+
+    forbidden_text = [
+        "AI HOT",
+        "aihot",
+        "virxact",
+        "x_social_posts",
+        "x_social_translated",
+        "--x-social",
+        "split_social_posts.py",
+        "X Social 模式",
+        "Social Splitter",
+    ]
+    skip = {
+        Path("scripts/healthcheck.py"),
+        Path("scripts/run_contract_tests.py"),
+    }
+    text_hits: list[str] = []
+    for base in ["README.md", "SKILL.md", "assets", "config", "references", "scripts"]:
+        path = root / base
+        paths = [path] if path.is_file() else list(path.rglob("*")) if path.exists() else []
+        for candidate in paths:
+            if not candidate.is_file():
+                continue
+            rel = candidate.relative_to(root)
+            if rel in skip or candidate.suffix in {".pyc", ".png", ".jpg", ".jpeg", ".gif", ".zip"}:
+                continue
+            try:
+                text = candidate.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for token in forbidden_text:
+                if token in text:
+                    text_hits.append(f"{rel}:{token}")
+    hits = path_hits + text_hits
+    return [("personal_x_artifacts_absent", not hits, "; ".join(hits) if hits else "ok")]
 
 
 def check_report_config(root: Path) -> list[tuple[str, bool, str]]:
@@ -100,9 +177,23 @@ def check_report_config(root: Path) -> list[tuple[str, bool, str]]:
     checks.append(("automation.stable_gate", stable_gate_ok, "ok" if stable_gate_ok else "automation enabled before feedback stable"))
 
     stable_steps = (cfg.get("lifecycle") or {}).get("stable_daily_steps") or []
-    expected = ["0", "1", "2", "3", "3b", "4", "5", "6"]
+    expected = ["0", "1", "2", "3", "4", "4d", "5", "6"]
     checks.append(("lifecycle.stable_daily_steps", stable_steps == expected, ",".join(stable_steps)))
     return checks
+
+
+def unsupported_url_type(url: str | None) -> str | None:
+    if not url:
+        return None
+    host = httpx.URL(url).host or ""
+    host = host.lower()
+    if host in {"x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"}:
+        return "x_twitter"
+    if host.endswith(".twitter.com") or host.endswith(".x.com"):
+        return "x_twitter"
+    if host.startswith("nitter.") or ".nitter." in host:
+        return "x_twitter"
+    return None
 
 
 def parse_source_urls(sources_md: Path) -> list[tuple[str, str, str]]:
@@ -150,6 +241,9 @@ def source_quality(method: str, content: str) -> str:
 
 
 def probe(client: httpx.Client, sid: str, url: str, method: str) -> tuple[str, str, int | None, str, str]:
+    unsupported = unsupported_url_type(url)
+    if unsupported:
+        return sid, url, None, "unsupported", f"unsupported_source_type:{unsupported}"
     try:
         r = client.head(url, follow_redirects=True, timeout=10.0)
         if r.status_code >= 400 or r.status_code == 405:
@@ -203,6 +297,13 @@ def main() -> int:
     for name, ok, msg in check_report_config(root):
         mark = "✅" if ok else "❌"
         print(f"  {mark} {name:32s} {msg}")
+        if not ok:
+            failed += 1
+
+    print("\n=== Prompt contracts ===")
+    for name, ok, msg in check_other_signal_prompt(root) + check_no_personal_x_artifacts(root):
+        mark = "✅" if ok else "❌"
+        print(f"  {mark} {name:40s} {msg}")
         if not ok:
             failed += 1
 

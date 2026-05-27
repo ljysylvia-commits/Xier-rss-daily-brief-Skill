@@ -205,6 +205,138 @@ def load_json(path: Path | None) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+GENERIC_GIST_PHRASES = [
+    "这是一条来自",
+    "主题为",
+]
+MAX_GIST_CHARS = 80
+
+
+def has_cjk(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
+def has_long_english_fragment(text: str) -> bool:
+    return bool(re.search(r"[A-Za-z][A-Za-z0-9 ,.;:!?()/'\"+\-]{48,}", text or ""))
+
+
+def normalize_for_overlap(text: str) -> str:
+    return re.sub(r"\s+", "", text or "").lower()
+
+
+def text_units(text: str) -> set[str]:
+    normalized = normalize_for_overlap(text)
+    cjk_chars = re.findall(r"[\u4e00-\u9fff]", normalized)
+    cjk = [a + b for a, b in zip(cjk_chars, cjk_chars[1:])]
+    words = re.findall(r"[a-z0-9]+", normalized)
+    return set(cjk + words)
+
+
+def title_gist_similarity(title: str, gist: str) -> float:
+    title_units = text_units(title)
+    gist_units = text_units(gist)
+    if not title_units or not gist_units:
+        return 0.0
+    return len(title_units & gist_units) / len(title_units)
+
+
+def compact_len(text: str) -> int:
+    return len(re.sub(r"\s+", "", text or ""))
+
+
+def validate_translation_entry(entry: dict[str, Any], *, label: str) -> None:
+    cid = entry.get("cluster_id")
+    title = (entry.get("title_zh") or "").strip()
+    gist = (entry.get("gist_zh") or "").strip()
+    if not cid:
+        raise ValueError(f"{label}: missing cluster_id")
+    if not title:
+        raise ValueError(f"{label}: {cid} missing title_zh")
+    if not gist:
+        raise ValueError(f"{label}: {cid} missing gist_zh")
+    if gist != "中文摘要缺失" and compact_len(gist) > MAX_GIST_CHARS:
+        raise ValueError(f"{label}: {cid} gist_zh exceeds {MAX_GIST_CHARS} chars")
+    if not has_cjk(gist):
+        raise ValueError(f"{label}: {cid} gist_zh must contain Chinese")
+    if has_long_english_fragment(gist):
+        raise ValueError(f"{label}: {cid} gist_zh contains long English fragment")
+    if any(p in gist for p in GENERIC_GIST_PHRASES):
+        raise ValueError(f"{label}: {cid} gist_zh uses generic template phrasing")
+    if normalize_for_overlap(title) == normalize_for_overlap(gist):
+        raise ValueError(f"{label}: {cid} gist_zh duplicates title_zh")
+    if title_gist_similarity(title, gist) >= 0.82:
+        raise ValueError(f"{label}: {cid} gist_zh is too similar to title_zh")
+
+
+def load_translation_json(path: Path | None, *, arg_name: str, required: bool) -> dict[str, Any]:
+    if path is None:
+        if required:
+            raise ValueError(f"{arg_name} is required")
+        return {"entries": []}
+    if not path.exists():
+        raise ValueError(f"{arg_name} was provided but the file does not exist")
+    data = load_json(path)
+    if not isinstance(data, dict):
+        raise ValueError(f"{arg_name} must be a JSON object")
+    if set(data.keys()) != {"entries"}:
+        raise ValueError(f"{arg_name} must use only root key entries")
+    if not isinstance(data.get("entries"), list):
+        raise ValueError(f"{arg_name} must contain entries[]")
+    return data
+
+
+def evidence_unavailable(cluster: dict[str, Any] | None) -> bool:
+    if not cluster:
+        return False
+    try:
+        primary_tokens = int(cluster.get("primary_tokens") or 0)
+    except (TypeError, ValueError):
+        primary_tokens = 0
+    rss_summary = cluster.get("rss_summary")
+    return (
+        primary_tokens == 0
+        and not str(rss_summary or "").strip()
+        and cluster.get("fetch_status") == "content_extraction_failed"
+    )
+
+
+def validate_others_translated(
+    others_tr: dict[str, Any],
+    required_ids: list[str],
+    clusters_index: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    cluster_by_id = {
+        c.get("cluster_id"): c
+        for c in clusters_index.get("clusters", [])
+        if isinstance(c, dict) and c.get("cluster_id")
+    }
+    by_id: dict[str, dict[str, Any]] = {}
+    for entry in others_tr.get("entries", []):
+        if not isinstance(entry, dict):
+            raise ValueError("--others-translated entries[] must contain objects")
+        validate_translation_entry(entry, label="--others-translated")
+        cid = entry["cluster_id"]
+        if cid in by_id:
+            raise ValueError(f"--others-translated duplicate cluster_id: {cid}")
+        by_id[cid] = entry
+    missing = [cid for cid in required_ids if cid not in by_id]
+    if missing:
+        raise ValueError("--others-translated missing cluster_id: " + ", ".join(missing))
+    unexpected = [cid for cid in by_id if cid not in set(required_ids)]
+    if unexpected:
+        raise ValueError("--others-translated unexpected cluster_id: " + ", ".join(unexpected))
+    for cid in required_ids:
+        gist = (by_id[cid].get("gist_zh") or "").strip()
+        if evidence_unavailable(cluster_by_id.get(cid)):
+            if gist != "中文摘要缺失":
+                raise ValueError(
+                    f"--others-translated: {cid} evidence unavailable, gist_zh must be 中文摘要缺失"
+                )
+        elif gist == "中文摘要缺失":
+            raise ValueError(f"--others-translated: {cid} gist_zh cannot be 中文摘要缺失 when evidence is available")
+    return by_id
+
+
 def build_badges(row: dict[str, Any]) -> list[str]:
     badges: list[str] = []
     tier = row.get("tier")
@@ -304,6 +436,9 @@ WARNING_SHORT_LABEL = {
     "lint_fail": "部分价值块未通过质量校验，已自动剔除",
     "missing_reader_vm": "读者视角生成失败",
     "missing_audience_vm": "企业视角生成失败",
+    "source_uncertainty": "信源需核验",
+    "source_unverified": "信源需核验",
+    "unconfirmed_rumor": "未官宣信息，需核验",
 }
 
 AUTO_DEMOTED_REASON_LABEL = {
@@ -329,7 +464,7 @@ def summarize_warnings(warnings: list[Any]) -> str:
         else:
             wtype = str(w)
         key = "duplicate_event_of" if wtype.startswith("duplicate_event_of") else wtype
-        label = WARNING_SHORT_LABEL.get(key, "质量校验提示")
+        label = WARNING_SHORT_LABEL.get(key, "需人工复核")
         if wtype.startswith("duplicate_event_of"):
             label = "跨源同事件（Deduper 漏合并）"
         parts.append(label)
@@ -355,7 +490,7 @@ def has_mismatch_warning(vm: dict[str, Any] | None) -> bool:
 def attach_primary_gist(rows: list[dict[str, Any]], raw_items_path: Path) -> None:
     """
     从 raw_items.jsonl 拉每个 cluster.primary 的原文前 100 字，挂到 row.primary_gist。
-    用于 others tier 表格，当 VM 未跑时仍能给出 gist。
+    仅供 debug/QA 检查；正式模板不再把 raw gist 作为 Other Signals fallback。
     """
     if not raw_items_path.exists():
         return
@@ -435,7 +570,7 @@ def source_health_sections(fetcher_log: Path | None) -> dict[str, list[str]]:
 
     v0.10.2：新增 `no_new_items` 第五档（sources.md 注册但本次 0 新内容的源）。
     与 stale/irregular/dead 不同 —— no_new_items 代表 "通道健康 · 今日无新内容"，
-    不是健康度告警。
+    不是健康度告警。`unsupported` 代表当前开源版不支持的 source URL 类型。
     """
     sections = {
         "fresh": [],
@@ -443,6 +578,7 @@ def source_health_sections(fetcher_log: Path | None) -> dict[str, list[str]]:
         "stale": [],
         "irregular": [],
         "dead": [],
+        "unsupported": [],
     }
     if fetcher_log is None or not fetcher_log.exists():
         return sections
@@ -466,12 +602,12 @@ def main() -> int:
     parser.add_argument("--clusters-index", required=True, type=Path)
     parser.add_argument("--scored", required=True, type=Path)
     parser.add_argument("--value-mapped", required=True, type=Path)
-    parser.add_argument("--others-translated", type=Path, help="others_translated.json，60 条 others 的中文 title/gist")
+    parser.add_argument("--others-translated", required=True, type=Path, help="others_translated.json，others 的中文 title/gist")
     parser.add_argument("--outlook", type=Path)
     parser.add_argument("--fetcher-log", type=Path, default=Path("./tmp/fetcher.log"),
                         help="fetcher.log 路径，用于解析 freshness summary 填充信源状态。"
                              "v0.10.2：默认 ./tmp/fetcher.log，存在即用，不存在静默降级为空健康度。")
-    parser.add_argument("--raw-items", type=Path, help="raw_items.jsonl，用于 others tier gist fallback")
+    parser.add_argument("--raw-items", type=Path, help="raw_items.jsonl，仅用于 QA/debug 挂载 primary_gist")
     parser.add_argument("--run-context", type=Path)
     parser.add_argument("--template", required=True, type=Path)
     parser.add_argument("--output", type=Path)
@@ -517,8 +653,10 @@ def main() -> int:
             _o["_md"] = "\n".join(_lines)
         else:
             _o["_md"] = f"- **{_tag}** — {_o.get('body', '(空)')}"
-    others_tr = load_json(args.others_translated) or {"entries": []}
-    others_tr_by_id = {e["cluster_id"]: e for e in others_tr.get("entries", [])}
+    try:
+        others_tr = load_translation_json(args.others_translated, arg_name="--others-translated", required=True)
+    except ValueError as e:
+        parser.error(str(e))
     run_ctx = load_json(args.run_context) or {}
 
     cluster_meta_by_id = {c["cluster_id"]: c for c in clusters_index.get("clusters", [])}
@@ -553,11 +691,18 @@ def main() -> int:
             auto_demoted.append(cid)
         rows.append(row)
 
-    # 给 others tier 补 primary_gist（fallback gist 来源于 raw_items 原文）
+    # 给 QA/debug 补 primary_gist；正式模板不再把 raw gist 作为用户可见 fallback。
     if args.raw_items:
         attach_primary_gist(rows, args.raw_items)
 
-    # G2：把 others 的中文翻译挂到 row（title_zh_others / gist_zh_others），template 优先用这些
+    rows = rebalance_tiers(rows, report_config)
+    others_required_ids = [r.get("cluster_id") for r in rows if r.get("tier") == "others" and r.get("cluster_id")]
+    try:
+        others_tr_by_id = validate_others_translated(others_tr, others_required_ids, clusters_index)
+    except ValueError as e:
+        parser.error(str(e))
+
+    # G2：把最终 Other Signals 的中文翻译挂到 row（title_zh_others / gist_zh_others）
     for r in rows:
         cid = r.get("cluster_id")
         tr = others_tr_by_id.get(cid)
@@ -565,7 +710,6 @@ def main() -> int:
             r["title_zh_others"] = tr.get("title_zh")
             r["gist_zh_others"] = tr.get("gist_zh")
 
-    rows = rebalance_tiers(rows, report_config)
     tier_buckets = group_by_tier(rows)
     tier_counts = {k: len(v) for k, v in tier_buckets.items()}
 

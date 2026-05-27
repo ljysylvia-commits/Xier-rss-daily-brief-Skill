@@ -83,6 +83,10 @@ class RawItem:
     compressed_summary: str | None
     fetch_status: str
     fetch_error: str | None
+    detail_fetch_status: str | None
+    detail_fetch_error: str | None
+    evidence_state: str
+    content_warning: str | None
     freshness_state: str
 
 
@@ -194,6 +198,28 @@ def rough_token_count(text: str | None) -> int:
     chinese = len(re.findall(r"[\u4e00-\u9fff]", text))
     words = len(re.findall(r"[a-zA-Z]+", text))
     return int(chinese + words * 1.3)
+
+
+def unsupported_url_type(url: str | None) -> str | None:
+    if not url:
+        return None
+    host = urlparse(url).netloc.lower()
+    if "@" in host:
+        host = host.rsplit("@", 1)[-1]
+    host = host.split(":", 1)[0]
+    if host in {"x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"}:
+        return "x_twitter"
+    if host.endswith(".twitter.com") or host.endswith(".x.com"):
+        return "x_twitter"
+    if host.startswith("nitter.") or ".nitter." in host:
+        return "x_twitter"
+    return None
+
+
+def evidence_state(full_content: str | None, rss_summary: str | None = None) -> str:
+    if full_content or rss_summary:
+        return "content_available"
+    return "content_unavailable"
 
 
 def detect_lang(text: str | None) -> str:
@@ -407,8 +433,8 @@ def looks_like_boilerplate_only(text: str | None) -> bool:
         return True
     low = text.lower()
     boiler_signals = [
-        "keep up with the latest ai news",
-        "join 1,500,000+ professionals",
+        "keep up with the latest",
+        "join thousands of professionals",
         "subscribe",
         "sign up",
     ]
@@ -432,6 +458,13 @@ def fetch_rss(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
             continue
         url = entry.get("link") or ""
         title = entry.get("title") or "(no title)"
+        unsupported = unsupported_url_type(url)
+        if unsupported:
+            logging.getLogger("fetcher").warning(
+                "source=%s unsupported_source_type=%s url=%s title=%s",
+                src.source_id, unsupported, url, title,
+            )
+            continue
 
         content_html = ""
         if "content" in entry and entry.content:
@@ -439,6 +472,9 @@ def fetch_rss(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
         summary_html = entry.get("summary") or entry.get("description") or ""
 
         full_text: str | None = None
+        detail_fetch_status = "not_requested"
+        detail_fetch_error = None
+        content_warning = None
         summary_text = re.sub(r"<[^>]+>", "", summary_html).strip() or None
         if content_html and rough_token_count(re.sub(r"<[^>]+>", "", content_html)) >= 300:
             full_text = re.sub(r"<[^>]+>", "", content_html).strip()
@@ -449,13 +485,26 @@ def fetch_rss(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
                     page = http_get(client, url)
                     if page.status_code < 400:
                         extracted, warning = extract_article_text(page.text, url)
+                        detail_fetch_status = "ok"
+                        content_warning = warning
                         full_text = extracted or summary_text
                     else:
+                        detail_fetch_status = "http_4xx" if 400 <= page.status_code < 500 else "http_5xx"
+                        detail_fetch_error = f"http_{page.status_code}"
                         full_text = summary_text
-                except Exception:
+                except Exception as e:
+                    detail_fetch_status = "blocked"
+                    detail_fetch_error = e.__class__.__name__
                     full_text = summary_text
             else:
                 full_text = summary_text
+
+        item_fetch_status = "ok"
+        item_fetch_error = None
+        if not full_text and not summary_text:
+            item_fetch_status = "content_extraction_failed"
+            item_fetch_error = detail_fetch_error or content_warning or "empty_rss_summary_and_content"
+            content_warning = content_warning or item_fetch_error
 
         item = RawItem(
             item_id=f"src:{src.source_id}:{sha1_short(url or title)}",
@@ -471,8 +520,12 @@ def fetch_rss(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
             full_content_tokens=rough_token_count(full_text),
             rss_summary=summary_text,
             compressed_summary=None,
-            fetch_status="ok",
-            fetch_error=None,
+            fetch_status=item_fetch_status,
+            fetch_error=item_fetch_error,
+            detail_fetch_status=detail_fetch_status,
+            detail_fetch_error=detail_fetch_error,
+            evidence_state=evidence_state(full_text, summary_text),
+            content_warning=content_warning,
             freshness_state="fresh",  # 占位，汇总时覆盖
         )
         items.append(item)
@@ -506,6 +559,10 @@ def fetch_web(client: httpx.Client, src: Source, cutoff: datetime, now: datetime
         compressed_summary=None,
         fetch_status=fetch_status,
         fetch_error=warning,
+        detail_fetch_status=fetch_status,
+        detail_fetch_error=warning,
+        evidence_state=evidence_state(full_text),
+        content_warning=warning,
         freshness_state="fresh",
     )
     return [item]
@@ -547,6 +604,10 @@ def make_failed_item(src: Source, err: str, now: datetime) -> RawItem:
         compressed_summary=None,
         fetch_status=classify_error(err),
         fetch_error=err[:200],
+        detail_fetch_status=None,
+        detail_fetch_error=None,
+        evidence_state="content_unavailable",
+        content_warning=err[:200],
         freshness_state="irregular",
     )
 
@@ -583,6 +644,13 @@ def fetch_one(
 ) -> list[RawItem]:
     """source_state：本源的状态切片，archive_scrape 会读写；其它类型忽略。
     线程安全：每个线程只访问自己 source_id 对应的 dict，主线程 save 时已 join。"""
+    unsupported = unsupported_url_type(src.url)
+    if unsupported:
+        logging.getLogger("fetcher").warning(
+            "source=%s unsupported_source_type=%s url=%s",
+            src.source_id, unsupported, src.url,
+        )
+        return []
     headers = {
         "User-Agent": UA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -672,6 +740,13 @@ def fetch_archive(
     fresh: list[tuple[Any, datetime]] = []
     needs_detail: list[Any] = []
     for e in entries:
+        unsupported = unsupported_url_type(e.url)
+        if unsupported:
+            log.warning(
+                "source=%s unsupported_source_type=%s url=%s title=%s",
+                src.source_id, unsupported, e.url, e.title,
+            )
+            continue
         if e.published_at and e.published_at >= cutoff:
             fresh.append((e, e.published_at))
         elif e.published_at and e.published_at < cutoff:
@@ -755,6 +830,10 @@ def fetch_archive(
                 compressed_summary=None,
                 fetch_status="content_extraction_failed" if warning == "boilerplate_only" else "ok",
                 fetch_error=warning,
+                detail_fetch_status="content_extraction_failed" if warning == "boilerplate_only" else "ok",
+                detail_fetch_error=warning,
+                evidence_state=evidence_state(full_text),
+                content_warning=warning,
                 freshness_state="fresh",
             )
         )
@@ -789,8 +868,8 @@ def annotate_freshness(
     """按 source_id 汇总最新 published_at → freshness_state，回填到每条。
 
     v0.10.2：补全全量源覆盖 —— sources.md 中注册但本次抓取未拉到 item 的信源，
-    默认登记为 `no_new_items`（通道健康、今日无新内容）。下游 Writer 以独立
-    "今日无新内容" 段渲染，避免信源健康度只有 fresh 档。
+    默认登记为 `no_new_items`（通道健康、今日无新内容）。unsupported URL 登记为
+    `unsupported`，避免把不支持的输入误写成健康通道。
     """
     latest_by_source: dict[str, datetime | None] = {}
     for it in items:
@@ -810,11 +889,11 @@ def annotate_freshness(
         it.freshness_state = state
         source_state[it.source_id] = state
 
-    # 再补齐 sources.md 中注册但本次 0 item 的源 → no_new_items（第五档）
+    # 再补齐 sources.md 中注册但本次 0 item 的源 → no_new_items / unsupported
     if sources:
         for s in sources:
             if s.source_id not in source_state:
-                source_state[s.source_id] = "no_new_items"
+                source_state[s.source_id] = "unsupported" if unsupported_url_type(s.url) else "no_new_items"
 
     return source_state
 

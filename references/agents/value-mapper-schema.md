@@ -180,7 +180,7 @@
 - `warnings` 合并来自两侧 + merge 脚本的 lint 记录
 - `content_mode` / `section_scan` 由 Reader VM 透传到合并产物，仅用于 QA / debug，不进入日报渲染
 
-**tier = others 的 cluster 不调用 Value-Mapper**，但仍必须中文化。主 Agent 在 Writer 前生成 `${RUN_DIR}/others_translated.json`，为每个 `tier=others` cluster 提供 `title_zh` 与 `gist_zh`。Writer 渲染「其他信息」时不得直接显示英文 raw gist。VM 只处理 must_read / recommended / optional 三档。
+**最终展示在 Other Signals 的 cluster 不调用 Value-Mapper**，但仍必须中文化。主 Agent 在 Step 4d 调用 `scripts/build_other_signal_inputs.py` 生成 `${RUN_DIR}/other_signal_inputs.json`，再调用 `other-signal-summarizer` 子 Agent 生成 `${RUN_DIR}/others_translated.json`，为 Scorer 原始 `tier=others`、VM `title_content_mismatch` 自动降级、以及 `report_config.report_length` 下放到 Other Signals 的 cluster 提供 `title_zh` 与 `gist_zh`。`others_translated.json` 不输出来源、链接、备注；这些由 Writer 从上游 metadata 合并。Writer 渲染「其他信息」时不得直接显示英文 raw gist、`primary_gist` 或 `core_content[0]` fallback。VM 只处理 must_read / recommended / optional 三档。
 
 ---
 

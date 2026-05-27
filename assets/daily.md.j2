@@ -118,7 +118,7 @@ Daily-Brief · Writer 模板
 {% endif %}
 {% if row.get("degraded") or (vm.get("warnings") or []) %}
 
-ℹ️ 降级提示：{{ row.get("warnings_short") or "该条目为降级产物" }}
+ℹ️ 质量提示：{{ row.get("warnings_short") or "该条目为降级产物" }}
 {% endif %}
 
 ---
@@ -159,9 +159,7 @@ Daily-Brief · Writer 模板
 {%- set title = row.get("title_zh_others") or vm.get("title_zh") or row.get("primary_title") or row.get("title") or "—" -%}
 {%- set url = row.get("primary_url") -%}
 {%- set title_cell = ("[" ~ (title | replace("|", "\\|") | replace("[", "(") | replace("]", ")")) ~ "](" ~ url ~ ")") if url else (title | replace("|", "\\|")) -%}
-{%- set cc = vm.get("core_content") or [] -%}
-{%- set raw_gist = row.get("primary_gist") or "" -%}
-{%- set gist_src = row.get("gist_zh_others") or (cc[0] if cc else raw_gist) or "" -%}
+{%- set gist_src = row.get("gist_zh_others") or "中文摘要缺失" -%}
 {%- set gist = (gist_src | replace("|", "\\|") | replace("\n", " ") | truncate(100, end="…")) -%}
 {%- set note_parts = [] -%}
 {%- if row.get("tier_adjusted_reason") or row.get("auto_demoted_reason") -%}{%- set _ = note_parts.append("⬇️ 原 " ~ row.get("original_tier_label", row.original_tier) ~ " 降级") -%}{%- endif -%}
@@ -216,7 +214,8 @@ Daily-Brief · Writer 模板
 {% set stale = source_health.get("stale") or [] %}
 {% set irregular = source_health.get("irregular") or [] %}
 {% set dead = source_health.get("dead") or [] %}
-{% set total_registered = (fresh | length) + (no_new | length) + (stale | length) + (irregular | length) + (dead | length) %}
+{% set unsupported = source_health.get("unsupported") or [] %}
+{% set total_registered = (fresh | length) + (no_new | length) + (stale | length) + (irregular | length) + (dead | length) + (unsupported | length) %}
 **今日有更新**（{{ fresh | length }} / {{ total_registered }}）：{{ fresh | join(" · ") or "—" }}
 
 **今日无新内容**（{{ no_new | length }} / {{ total_registered }}）：{{ no_new | join(" · ") or "—" }}
@@ -233,7 +232,13 @@ Daily-Brief · Writer 模板
 {% for s in dead %}- ❌ `{{ s }}` 疑似停更（> 90 天）
 {% endfor %}
 {% endif %}
-_信源状态说明：`今日有更新` = 24h 窗口拉到新内容；`今日无新内容` = 通道健康但本次窗口无新条目；`今日无更新但近期活跃` = 7 天内有历史内容；`健康告警` = 长期无更新需人工核查。_
+{% if unsupported %}
+**不支持的信源**
+
+{% for s in unsupported %}- ⚠️ `{{ s }}` 属于当前开源版不支持的 URL 类型，已跳过
+{% endfor %}
+{% endif %}
+_信源状态说明：`今日有更新` = 24h 窗口拉到新内容；`今日无新内容` = 通道健康但本次窗口无新条目；`今日无更新但近期活跃` = 7 天内有历史内容；`健康告警` = 长期无更新需人工核查；`不支持的信源` = 当前开源版不处理的 URL 类型。_
 
 ---
 
